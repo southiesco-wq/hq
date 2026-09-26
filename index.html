@@ -423,13 +423,18 @@ const first = m => m ? m.name.split(" ")[0] : "";
 const route = () => state.stack[state.stack.length - 1];
 const ACC_OK = ["cap","bun","glasses","headphones","beanie","antenna"];
 const SWATCH = ["#FF5A36","#FF9EC4","#93E6A8","#FFC83D","#A98BFF","#86D4F5","#FF8A3D","#7ED6C9","#E2F266","#F4A7FF"];
+const PROJ_ICON_OK = ["folder","pot","shirt","leaf","box","book","coin"];
 function bstyle(key){
   const m = member(key);
   if(m && m.buddy && /^#[0-9a-fA-F]{6}$/.test(m.buddy.c || "") && ACC_OK.includes(m.buddy.a)) return {c:m.buddy.c, a:m.buddy.a};
   if(BUDDY[key]) return BUDDY[key];
   const i = Math.max(0, members().findIndex(x => x.key === key)); return {c:FALLBACK[i % 6], a:ACCS[i % 6]};
 }
-const pstyle = k => PROJ_STYLE[k] || {c:"#FFE9D6", i:"folder"};
+function pstyle(k){
+  const p = project(k);
+  if(p && p.color && /^#[0-9a-fA-F]{6}$/.test(p.color) && PROJ_ICON_OK.includes(p.icon || "folder")) return {c:p.color, i:p.icon || "folder"};
+  return PROJ_STYLE[k] || {c:"#FFE9D6", i:"folder"};
+}
 
 /* ---------- Block Buddies: mascots built from the Southie's mark ---------- */
 function buddy(key, cls = "", mood = "happy", override){
@@ -641,7 +646,8 @@ function pageCalendar(){
 function pageProjects(){
   return `${pageHead("Projects","c-sun")}
     <div><div class="eyebrow">Clients and our own brands</div><h1 class="big" style="margin-top:6px">Every project,<br>one shelf.</h1></div>
-    <div class="folders">${projects().map(p => { const its = state.tasks.filter(t => t.project === p.key); const done = its.filter(t => t.status === "done").length; const ps = pstyle(p.key); const fresh = its.some(t => (t.createdAt || 0) > Date.now() - 2 * 864e5); return `<button type="button" class="folder press" style="--fc:${ps.c}" data-go="project" data-param="${esc(p.key)}"><div class="fh"><span class="fi">${ic(ps.i, ps.i === "mark" ? "ic" : "")}</span><span class="fc">${its.length - done} open${fresh ? `<br><span class="badge-new">NEW</span>` : ""}</span></div><span class="fn">${esc(p.name)}</span><div class="bar"><i style="width:${its.length ? done / its.length * 100 : 0}%"></i></div></button>`; }).join("")}</div>`;
+    <div class="folders">${projects().map(p => { const its = state.tasks.filter(t => t.project === p.key); const done = its.filter(t => t.status === "done").length; const ps = pstyle(p.key); const fresh = its.some(t => (t.createdAt || 0) > Date.now() - 2 * 864e5); return `<button type="button" class="folder press" style="--fc:${ps.c}" data-go="project" data-param="${esc(p.key)}"><div class="fh"><span class="fi">${ic(ps.i, ps.i === "mark" ? "ic" : "")}</span><span class="fc">${its.length - done} open${fresh ? `<br><span class="badge-new">NEW</span>` : ""}</span></div><span class="fn">${esc(p.name)}</span><div class="bar"><i style="width:${its.length ? done / its.length * 100 : 0}%"></i></div></button>`; }).join("")}
+      ${state.canWrite ? `<button type="button" class="folder press addcard" style="--fc:var(--card);align-items:center;text-align:center" data-go="editproject" data-param="new"><span class="plusbig">+</span><span class="fn">Add a project</span></button>` : ""}</div>`;
 }
 function pageProject(key){
   const p = project(key); if(!p) return emptyBox("Not found", "That project isn't on the board any more.");
@@ -650,6 +656,7 @@ function pageProject(key){
   const people = [...new Set(open.flatMap(t => t.assignees || []))].filter(member);
   return `${pageHead(p.name, "c-sun")}
     <section class="phero" style="--fc:${ps.c}"><div><div class="eyebrow">${p.kind === "client" ? "Client" : p.kind === "own" ? "Our brand" : "Studio"}</div><h1 class="big" style="margin-top:6px">${pct}%</h1><div class="role">${done.length} of ${its.length} tasks done</div><div class="faces" style="margin-top:10px">${people.map(k => face(k)).join("")}</div></div><span class="fi" style="width:84px;height:84px;border:var(--b);border-radius:22px;background:var(--card);display:grid;place-items:center;box-shadow:var(--sh-sm)">${bigIcon(ps.i)}</span></section>
+    ${state.canWrite ? `<div class="actions"><button type="button" class="cta white press" data-go="editproject" data-param="${esc(key)}">Edit details</button></div>` : ""}
     ${qaBlock({placeholder:`Add to ${p.name}`, project:key})}
     ${open.length ? group("Open", open) : emptyBox("All wrapped", "No open tasks on this project.")}
     ${group("Done", done.sort((a,b) => (b.doneAt||0) - (a.doneAt||0)).slice(0,8))}`;
@@ -789,6 +796,69 @@ async function removeMember(){
   try{ { const rest = members().filter(x => x.key !== key); await state.db.doc("config/team").update({members: rest, emails: rest.map(x => (x.email || "").toLowerCase()).filter(Boolean)}); } state.stack = [{name:"team"}]; render(true); toast(`${first(m)} was removed. Their old tasks stay on the board.`); }
   catch(er){ writeError(er); }
 }
+function pageEditProject(param){
+  const isNew = param === "new", p = isNew ? null : project(param);
+  if(!isNew && !p) return emptyBox("Not found", "That project isn't on the board any more.");
+  if(!state.canWrite) return `${pageHead("Project details","c-sun")}<div class="notice">You need editor access to change projects.</div>`;
+  const used = projects().map(x => pstyle(x.key).c);
+  const st = p ? pstyle(p.key) : {c: SWATCH.find(c => !used.includes(c)) || SWATCH[0], i: "folder"};
+  state.editProjStyle = {...st};
+  return `${pageHead(isNew ? "Add a project" : "Edit " + p.name, "c-sun", "<span></span>")}
+    <section class="phero" id="ep-hero" style="--fc:${st.c}"><div><div class="eyebrow">${isNew ? "New project" : "Project"}</div><h1 class="big" id="ep-name" style="margin-top:6px">${esc(p ? p.name : "New project")}</h1></div><span class="fi" id="ep-icon" style="width:84px;height:84px;border:var(--b);border-radius:22px;background:var(--card);display:grid;place-items:center;box-shadow:var(--sh-sm)">${bigIcon(st.i)}</span></section>
+    <form id="pform" class="nb" style="padding:16px;display:flex;flex-direction:column;gap:16px" novalidate>
+      <label class="fld"><span>Project name</span><input type="text" class="txt" id="p-name" required maxlength="60" value="${esc(p ? p.name : "")}" placeholder="e.g. Ethnic Katha" autocomplete="off"></label>
+      <div class="fld"><span>Kind</span><div class="opts">
+        <label><input type="radio" name="p-kind" value="client" ${(!p || p.kind === "client") ? "checked" : ""}><span>Client</span></label>
+        <label><input type="radio" name="p-kind" value="own" ${p && p.kind === "own" ? "checked" : ""}><span>Our brand</span></label>
+        <label><input type="radio" name="p-kind" value="studio" ${p && p.kind === "studio" ? "checked" : ""}><span>Studio</span></label>
+      </div></div>
+      <div class="fld"><span>Colour</span><div class="opts swatches">${SWATCH.map((c, i) => `<label><input type="radio" name="p-color" id="p-color-${i}" value="${c}" ${st.c === c ? "checked" : ""}><span class="sw" style="background:${c}" aria-label="Colour ${i + 1}"></span></label>`).join("")}</div></div>
+      <div class="fld"><span>Icon</span><div class="opts">${PROJ_ICON_OK.map(i => `<label><input type="radio" name="p-icon" id="p-icon-${i}" value="${i}" ${st.i === i ? "checked" : ""}><span class="fi" style="width:34px;height:34px;border:var(--b);border-radius:10px;background:var(--card);display:inline-grid;place-items:center">${ic(i)}</span></label>`).join("")}</div></div>
+      <div class="meta" id="p-err" role="alert"></div>
+      <div class="actions"><button type="submit" class="btn primary press">${isNew ? "Add project" : "Save details"}</button><span class="spacer"></span>${!isNew ? `<button type="button" class="btn danger press" id="p-del">Delete project</button>` : ""}</div>
+    </form>
+    <div class="tip">${isNew ? "New projects show up on the Projects shelf right away." : "Existing tasks stay linked to this project's key until you delete it."}</div>`;
+}
+function syncEditProjectPreview(){
+  const n = $("#p-name"); if(!n) return;
+  const c = (document.querySelector('input[name="p-color"]:checked') || {}).value || state.editProjStyle.c;
+  const i = (document.querySelector('input[name="p-icon"]:checked') || {}).value || state.editProjStyle.i;
+  state.editProjStyle = {c, i};
+  $("#ep-name").textContent = n.value.trim() || "New project";
+  $("#ep-hero").style.setProperty("--fc", c);
+  $("#ep-icon").innerHTML = bigIcon(i);
+}
+async function saveProject(e){
+  e.preventDefault();
+  const r = route(), isNew = r.param === "new", err = $("#p-err");
+  const name = $("#p-name").value.trim();
+  const kind = (document.querySelector('input[name="p-kind"]:checked') || {}).value || "client";
+  const st = {...state.editProjStyle};
+  if(!name){ err.textContent = "Give the project a name."; $("#p-name").focus(); return; }
+  const list2 = projects().map(x => ({...x}));
+  let key = r.param;
+  if(isNew){
+    const base = name.toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 16) || "project";
+    key = base; let n = 2; while(list2.some(x => x.key === key)) key = base + n++;
+    list2.push({key, name, kind, color: st.c, icon: st.i});
+  } else {
+    const idx = list2.findIndex(x => x.key === key); list2[idx] = {...list2[idx], name, kind, color: st.c, icon: st.i};
+  }
+  try{
+    await state.db.doc("config/team").update({projects: list2});
+    state.stack[state.stack.length - 1] = {name:"project", param:key};
+    render(true); window.scrollTo(0,0);
+    toast(isNew ? `${name} added to the shelf` : "Details saved");
+    if(isNew){ const r2 = $("#main"); const b = r2 && r2.querySelector(".phero"); if(b){ const rc = b.getBoundingClientRect(); confetti(rc.left + rc.width / 2, rc.top + rc.height / 2); } }
+  }catch(er){ writeError(er); }
+}
+async function removeProject(){
+  const key = route().param, p = project(key), btn = $("#p-del"); if(!p) return;
+  if(!state.confirmRemoveProj){ state.confirmRemoveProj = true; btn.textContent = `Tap again to delete ${p.name}`; btn.classList.add("confirm"); return; }
+  state.confirmRemoveProj = false;
+  try{ const rest = projects().filter(x => x.key !== key); await state.db.doc("config/team").update({projects: rest}); state.stack = [{name:"projects"}]; render(true); toast(`${p.name} was deleted. Its old tasks stay on the board, just unfiled.`); }
+  catch(er){ writeError(er); }
+}
 async function copyText(v, btn){
   try{ await navigator.clipboard.writeText(v); btn.textContent = "Copied"; setTimeout(() => btn.textContent = "Copy", 1500); }
   catch(er){ const r = document.createRange(); const span = btn.previousElementSibling; if(span){ r.selectNodeContents(span); const s = getSelection(); s.removeAllRanges(); s.addRange(r); } toast("Selected. Use your phone's Copy."); }
@@ -822,6 +892,7 @@ function renderNav(){
 function render(force){
   if(!force && ((sw && sw.active) || drag)){ state.pending = true; return; }
   if(!force && route().name === "editmember" && $("#mform")){ state.pending = true; renderNav(); return; }
+  if(!force && route().name === "editproject" && $("#pform")){ state.pending = true; renderNav(); return; }
   const ae = document.activeElement, main = $("#main");
   if(!force && ae && main.contains(ae) && /INPUT|TEXTAREA|SELECT/.test(ae.tagName) && ae.value){ state.pending = true; return; }
   if(!$("#layer").hidden && $("#s-results")) renderSearch();
@@ -848,6 +919,7 @@ function render(force){
   else if(r.name === "private") html += pagePrivate();
   else if(r.name === "me") html += pageMe();
   else if(r.name === "editmember") html += pageEditMember(r.param);
+  else if(r.name === "editproject") html += pageEditProject(r.param);
   const cs = $("#cols") ? $("#cols").scrollLeft : 0;
   main.innerHTML = html;
   if($("#cols")) $("#cols").scrollLeft = cs;
@@ -1094,19 +1166,20 @@ document.addEventListener("click", e => {
   if(T("[data-signout]")){ signOut(); return; }
   if((el = T("[data-copy]"))){ copyText(el.dataset.copy, el); return; }
   if(e.target.id === "m-del"){ removeMember(); return; }
+  if(e.target.id === "p-del"){ removeProject(); return; }
   if(e.target.id === "del"){ deleteTask(); return; }
   if(T("#fab")){ openSheet(null); return; }
   if(T("#qa-lock")){ e.preventDefault(); state.qaPrivate = !state.qaPrivate; const b = $("#qa-lock"); b.setAttribute("aria-pressed", String(qaPrivate())); $("#qa-input").placeholder = qaPrivate() ? "Add to your private list" : "Add a task…"; renderQaChips(); return; }
   if(T("#qa-add")){ quickAdd(); return; }
 }, true);
-document.addEventListener("input", e => { if(e.target.id === "qa-input") renderQaChips(); if(e.target.id === "s-input"){ state.search = e.target.value; renderSearch(); } if(e.target.id === "m-name" || e.target.id === "m-role") syncEditPreview(); });
+document.addEventListener("input", e => { if(e.target.id === "qa-input") renderQaChips(); if(e.target.id === "s-input"){ state.search = e.target.value; renderSearch(); } if(e.target.id === "m-name" || e.target.id === "m-role") syncEditPreview(); if(e.target.id === "p-name") syncEditProjectPreview(); });
 document.addEventListener("keydown", e => {
   if(e.key === "Escape"){ if(!$("#modal").hidden) $("#modal").hidden = true; else if(!$("#sheet").hidden) closeSheet(); else if(!$("#layer").hidden) closeLayer(); }
   if(e.key === "Enter" && e.target.id === "qa-input"){ e.preventDefault(); quickAdd(); }
 });
 document.addEventListener("focusout", e => { if(e.target.id === "qa-input" && state.pending && !e.target.value){ state.pending = false; setTimeout(render, 0); } });
-document.addEventListener("change", e => { if(e.target.name === "f-list"){ const w = $("#assign-wrap"); if(w) w.hidden = e.target.value === "private"; } if(e.target.name === "m-color" || e.target.name === "m-acc") syncEditPreview(); });
-document.addEventListener("submit", e => { if(e.target.id === "tform") saveTask(e); else if(e.target.id === "cform") postComment(e); else if(e.target.id === "mform") saveMember(e); });
+document.addEventListener("change", e => { if(e.target.name === "f-list"){ const w = $("#assign-wrap"); if(w) w.hidden = e.target.value === "private"; } if(e.target.name === "m-color" || e.target.name === "m-acc") syncEditPreview(); if(e.target.name === "p-color" || e.target.name === "p-icon") syncEditProjectPreview(); });
+document.addEventListener("submit", e => { if(e.target.id === "tform") saveTask(e); else if(e.target.id === "cform") postComment(e); else if(e.target.id === "mform") saveMember(e); else if(e.target.id === "pform") saveProject(e); });
 setInterval(() => { document.querySelectorAll("[data-countdown]").forEach(el => el.innerHTML = cdHtml(+el.dataset.countdown)); }, 15000);
 setInterval(() => { if(state.ready && !state.sheet) render(); }, 60000);
 
