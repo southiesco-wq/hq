@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Southie's HQ</title>
+<meta name="apple-mobile-web-app-title" content="Southie's HQ">
+<meta name="application-name" content="Southie's HQ">
+<meta name="theme-color" content="#FFC83D">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="manifest" href="manifest.webmanifest">
+<style>
+  html,body{margin:0;height:100%;background:#FFC83D}
+  body{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#1B0D10;
+    background-image:radial-gradient(rgba(27,13,16,.16) 1.4px,transparent 1.5px);background-size:22px 22px;padding:24px;box-sizing:border-box;text-align:center}
+  svg{width:96px;height:176px;overflow:visible}
+  svg .b{fill:#FF5A36;stroke:#1B0D10;stroke-width:5;stroke-linejoin:round}
+  .word{width:200px;aspect-ratio:559/53;background:#1B0D10;-webkit-mask:url(wordmark.png) no-repeat center/contain;mask:url(wordmark.png) no-repeat center/contain}
+  .tag{font-weight:800;font-size:11px;letter-spacing:.28em;background:#1B0D10;color:#FFC83D;padding:6px 12px;border-radius:99px}
+  a{color:#1B0D10;font-weight:800;font-size:15px;border:2.5px solid #1B0D10;background:#fff;border-radius:14px;padding:11px 18px;box-shadow:3px 3px 0 #1B0D10;text-decoration:none}
+  p{margin:0;font-weight:600;font-size:14px}
+  @media (prefers-reduced-motion:no-preference){svg .b{animation:d .5s cubic-bezier(.3,1.6,.5,1) both}svg .b2{animation-delay:.1s}svg .b3{animation-delay:.2s}svg .b4{animation-delay:.3s}@keyframes d{from{transform:translateY(-90px);opacity:0}to{transform:none;opacity:1}}}
+</style>
+</head>
+<body>
+  <svg viewBox="-6 -6 111 192" aria-hidden="true">
+    <rect class="b b1" x="25" y="0" width="49" height="26"/>
+    <rect class="b b2" x="0" y="26" width="25" height="99"/>
+    <rect class="b b3" x="74" y="26" width="25" height="99"/>
+    <polygon class="b b4" points="25,125 74,125 99,180 0,180"/>
+  </svg>
+  <div class="word" role="img" aria-label="Southie's"></div>
+  <div class="tag">TEAM HQ</div>
+  <p id="msg">Opening HQ…</p>
+  <a id="go" href="https://claude.ai/artifact/CWPmo9f9cerh7gET7jKtyf">Open Southie's HQ</a>
+<script>
+  // Forward to HQ, except on the very first visit from a browser tab,
+  // so there's time to tap Share > Add to Home Screen.
+  var HQ = "https://claude.ai/artifact/CWPmo9f9cerh7gET7jKtyf";
+  var standalone = window.navigator.standalone === true || window.matchMedia("(display-mode: standalone)").matches;
+  var seen = false; try { seen = localStorage.getItem("hq-seen") === "1"; localStorage.setItem("hq-seen","1"); } catch (e) {}
+  if (standalone || seen || /[?&]go=1/.test(location.search)) {
+    setTimeout(function(){ location.replace(HQ); }, 700);
+  } else {
+    document.getElementById("msg").textContent = "Tap Share, then Add to Home Screen, to get this icon. Next time this page opens HQ straight away.";
+  }
+</script>
+</body>
+</html>
