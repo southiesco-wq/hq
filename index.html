@@ -1186,6 +1186,7 @@ async function boot(){
     let gotTeam = false, gotTasks = false; const maybeDone = () => { if(gotTeam && gotTasks){ state.ready = true; progress(92); hideSplash(); render(); } };
     unsubs.push(db.doc("config/team").onSnapshot(s => { state.team = s.exists ? s.data() : null; resolveMe(); gotTeam = true; if(!state.team && OWNERS.includes(state.email)){ state.needsSetup = true; } announce(); render(); maybeDone(); }, denied));
     unsubs.push(db.collection("tasks").onSnapshot(s => { state.tasks = s.docs.map(d => ({...d.data(), id:d.id, list:"team"})); gotTasks = true; render(); maybeDone(); if(state.sheet && !state.sheet.isNew && !findTask(state.sheet.key)){ closeSheet(); toast("That task was deleted by someone else."); } }, denied));
+    claimPending(db);
     const pd = db.doc(`users/${state.uid}`);
     unsubs.push(pd.onSnapshot(s => { state.privMe = s.exists ? s.data() : null; resolveMe(); announce(); render(); }, () => {}));
     unsubs.push(pd.collection("tasks").onSnapshot(s => { state.priv = s.docs.map(d => ({...d.data(), id:d.id, list:"private"})); render(); }, () => {}));
@@ -1200,6 +1201,16 @@ async function boot(){
       });
     }, () => {}));
   });
+}
+async function claimPending(db){
+  try{
+    const ref = db.doc(`pending/${state.email}`); const snap = await ref.get();
+    if(!snap.exists) return;
+    const d = snap.data() || {};
+    for(const t of (d.privateTasks || [])){ const {id, ...rest} = t; await db.doc(`users/${state.uid}/tasks/${id || db.collection("x").doc().id}`).set(rest); }
+    await ref.delete();
+    if((d.privateTasks || []).length) toast(`Moved ${(d.privateTasks || []).length} tasks into your private list`);
+  }catch(e){}
 }
 window.hqAdmin = {
   async importData(data){

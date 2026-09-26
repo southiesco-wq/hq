@@ -16,6 +16,7 @@ service cloud.firestore {
     }
     match /presence/{memberKey} { allow read, write: if isTeam(); }
     match /events/{eventId} { allow read, create: if isTeam(); }
+    match /pending/{email} { allow read, delete: if signedIn() && myEmail() == email; }
     match /users/{uid} {
       allow read, write: if isTeam() && request.auth.uid == uid;
       match /tasks/{taskId} { allow read, write: if isTeam() && request.auth.uid == uid; }
