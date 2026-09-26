@@ -1,13 +1,27 @@
 {
   "name": "Southie's HQ",
   "short_name": "Southie's HQ",
-  "start_url": "./?go=1",
+  "start_url": "./",
+  "scope": "./",
   "display": "browser",
   "background_color": "#FFC83D",
   "theme_color": "#FFC83D",
   "icons": [
-    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
-    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
   ]
 }
