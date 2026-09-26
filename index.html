@@ -377,6 +377,7 @@ img{max-width:100%}
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js"></script>
 <script src="firebase-config.js"></script>
 <script>
 const TZ = "Asia/Kolkata";
@@ -409,9 +410,10 @@ const state = {
   stack:[{name:"home"}], people:new Set(), status:"open", view:"list", mineDone:false,
   homeDay:null, calMode:"month", calMonth:0, calDay:null, lbRange:"week", memberTab:"open",
   online:new Set(), sheet:null, unsubC:null, comments:[], confirmDel:false, picking:false,
-  qaPrivate:false, pending:false, search:"", splashDone:false
+  qaPrivate:false, pending:false, search:"", splashDone:false, pushOn:false, pushBusy:false
 };
 try{ const v = localStorage.getItem("hq-view"); if(v === "cols" || v === "list") state.view = v; }catch(e){}
+try{ state.pushOn = !!localStorage.getItem("hq-push-token") && typeof Notification !== "undefined" && Notification.permission === "granted"; }catch(e){}
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -724,8 +726,11 @@ function pageMe(){
     <div class="nb" style="padding:16px;display:flex;flex-direction:column;gap:10px"><h3 style="margin:0;font-family:var(--display);font-size:15px">Quick-add cheat sheet</h3>
       <div class="meta"><code class="chip">@name</code> assigns someone · <code class="chip">!1</code> to <code class="chip">!4</code> sets priority · <code class="chip">#kbcp</code> sets the project · <code class="chip">tomorrow 3pm</code>, <code class="chip">friday</code>, <code class="chip">12 oct</code> set the due time (IST).</div>
       <div class="meta">Example: <b>Send KBCP invoice @shephin !1 #kbcp friday 5pm</b></div></div>
+    <div class="nb" style="padding:16px;display:flex;flex-direction:column;gap:10px"><h3 style="margin:0;font-family:var(--display);font-size:15px">Phone notifications</h3>
+      <div class="meta">${state.pushOn ? "On for this device — you'll get a push when you're assigned a task, and reminders a day before, an hour before, and if something's overdue." : "Get a push notification on this phone or computer the moment you're assigned a task, plus reminders a day before, an hour before, and if it's overdue."}</div>
+      ${pushSupported() ? (state.pushOn ? `<button type="button" class="cta white press" data-disable-push="1" ${state.pushBusy ? "disabled" : ""} style="align-self:flex-start">${state.pushBusy ? "Working…" : "Turn off on this device"}</button>` : `<button type="button" class="cta press" data-enable-push="1" ${state.pushBusy ? "disabled" : ""} style="align-self:flex-start">${state.pushBusy ? "Working…" : "Enable phone notifications"}</button>`) : `<div class="meta">${typeof Notification !== "undefined" && Notification.permission === "denied" ? "Notifications are blocked for this site — allow them in your browser or phone's site settings, then reload." : "Not supported in this browser. Try Chrome on Android, or add HQ to your Home Screen on iPhone first."}</div>`}</div>
     <div class="nb" style="padding:16px;display:flex;flex-direction:column;gap:8px"><h3 style="margin:0;font-family:var(--display);font-size:15px">Reminders</h3>
-      <div class="meta">When someone is assigned a team task, they get an email from southies.co@gmail.com with the details, plus a Google Calendar invite if the task has a due date. HQ checks every hour from 8:52 AM to 9:52 PM IST. Nobody is emailed about tasks they gave themselves. Private tasks stay private, so use the "Add to Google Calendar" button inside them.</div></div>
+      <div class="meta">When someone is assigned a team task, they get an email from southies.co@gmail.com with the details, plus a Google Calendar invite if the task has a due date. HQ checks every 5 minutes. Nobody is emailed about tasks they gave themselves. Private tasks stay private, so use the "Add to Google Calendar" button inside them.</div></div>
     <div class="nb" style="padding:16px;display:flex;flex-direction:column;gap:8px"><h3 style="margin:0;font-family:var(--display);font-size:15px">Gestures</h3>
       <div class="meta">Swipe a task right to finish it. Drag cards between columns on the Board. Tap a teammate's buddy to see their page and nudge them when they're online.</div></div>`;
 }
@@ -1167,6 +1172,8 @@ document.addEventListener("click", e => {
   if((el = T("[data-copy]"))){ copyText(el.dataset.copy, el); return; }
   if(e.target.id === "m-del"){ removeMember(); return; }
   if(e.target.id === "p-del"){ removeProject(); return; }
+  if(T("[data-enable-push]")){ enablePush(); return; }
+  if(T("[data-disable-push]")){ disablePush(); return; }
   if(e.target.id === "del"){ deleteTask(); return; }
   if(T("#fab")){ openSheet(null); return; }
   if(T("#qa-lock")){ e.preventDefault(); state.qaPrivate = !state.qaPrivate; const b = $("#qa-lock"); b.setAttribute("aria-pressed", String(qaPrivate())); $("#qa-input").placeholder = qaPrivate() ? "Add to your private list" : "Add a task…"; renderQaChips(); return; }
@@ -1229,6 +1236,54 @@ async function signIn(){
   }
 }
 async function signOut(){ try{ if(state.meKey) await state.db.doc(`presence/${state.meKey}`).delete(); }catch(e){} await firebase.auth().signOut(); location.reload(); }
+
+/* ---------- phone push notifications ---------- */
+function pushSupported(){
+  return typeof Notification !== "undefined" && "serviceWorker" in navigator && !!window.HQ_VAPID_KEY && !!window.firebase && !!firebase.messaging && Notification.permission !== "denied";
+}
+function initPushForeground(){
+  try{
+    if(!("serviceWorker" in navigator) || !window.firebase || !firebase.messaging) return;
+    const messaging = firebase.messaging();
+    messaging.onMessage(payload => { const n = payload.notification || {}; if(n.title) toast(n.title + (n.body ? " — " + n.body : "")); });
+  }catch(e){}
+}
+async function enablePush(){
+  if(!pushSupported()){ toast(typeof Notification !== "undefined" && Notification.permission === "denied" ? "Notifications are blocked for this site in your browser settings." : "Push notifications aren't supported here."); return; }
+  if(!state.meKey){ toast("Pick who you are first."); return; }
+  state.pushBusy = true; render(true);
+  try{
+    const perm = await Notification.requestPermission();
+    if(perm !== "granted"){ toast("Notifications weren't enabled."); state.pushBusy = false; render(true); return; }
+    const reg = await navigator.serviceWorker.register("firebase-messaging-sw.js");
+    const messaging = firebase.messaging();
+    const token = await messaging.getToken({vapidKey: window.HQ_VAPID_KEY, serviceWorkerRegistration: reg});
+    if(!token) throw new Error("no token");
+    const list2 = members().map(x => ({...x}));
+    const i = list2.findIndex(x => x.key === state.meKey);
+    if(i < 0) throw new Error("not on team");
+    const toks = new Set((list2[i].pushTokens || [])); toks.add(token);
+    list2[i] = {...list2[i], pushTokens: [...toks]};
+    await state.db.doc("config/team").update({members: list2});
+    try{ localStorage.setItem("hq-push-token", token); }catch(e){}
+    state.pushOn = true; toast("Notifications are on for this device");
+  }catch(e){ toast("Couldn't turn on notifications. Try again in a bit."); }
+  state.pushBusy = false; render(true);
+}
+async function disablePush(){
+  state.pushBusy = true; render(true);
+  let token = ""; try{ token = localStorage.getItem("hq-push-token") || ""; }catch(e){}
+  try{
+    if(token && state.meKey){
+      const list2 = members().map(x => ({...x}));
+      const i = list2.findIndex(x => x.key === state.meKey);
+      if(i >= 0){ list2[i] = {...list2[i], pushTokens: (list2[i].pushTokens || []).filter(t => t !== token)}; await state.db.doc("config/team").update({members: list2}); }
+    }
+    try{ localStorage.removeItem("hq-push-token"); }catch(e){}
+    state.pushOn = false; toast("Notifications turned off on this device");
+  }catch(e){ writeError(e); }
+  state.pushBusy = false; render(true);
+}
 function pageSignIn(){
   return `<div class="whopage page-in" style="align-items:flex-start"><div class="minilock">${ic("mark","mk")}<div class="wm"></div></div>
     <div><div class="eyebrow">Team only</div><h1 class="big" style="margin-top:8px">Welcome to<br>Southie's HQ.</h1><p class="sub">Sign in with the Google account on your Southie's team profile.</p></div>
@@ -1245,6 +1300,7 @@ async function boot(){
   if(!FIREBASE_CONFIG || !window.firebase){ state.noHost = true; state.ready = true; render(true); hideSplash(); return; }
   firebase.initializeApp(FIREBASE_CONFIG);
   const db = firebase.firestore(); state.db = db;
+  initPushForeground();
   try{ await firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL); }catch(e){}
   try{ await firebase.auth().getRedirectResult(); }catch(e){ if(e && e.code) toast("Sign-in didn't finish. Try again."); }
   progress(45);

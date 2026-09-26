@@ -1,8 +1,9 @@
 /**
- * Southie's HQ — email + calendar worker.
+ * Southie's HQ — email + calendar + push worker.
  * Runs inside southies.co@gmail.com every 5 minutes (see setup()).
  *  - Emails anyone newly assigned to a team task.
  *  - Creates / updates Google Calendar invites for tasks with a due date.
+ *  - Sends a phone push on assignment, and deadline reminders (1 day / 1 hour / overdue).
  *  - Sends Richard a morning summary once a day.
  *  - Clears live-event records older than 2 days.
  */
@@ -45,10 +46,12 @@ function runCheck() {
       const notified = (t.notified || []).slice();
       const patch = {};
 
-      // (A) assignment emails
+      // (A) assignment emails + push
       const toSend = assignees.filter(k => notified.indexOf(k) < 0 && k !== assigner && byKey[k].email);
       toSend.forEach(k => {
+        const byName = byKey[assigner] ? first(byKey[assigner]) : 'Someone';
         sendAssignmentEmail(t, byKey[k], byKey[assigner], assignees.filter(x => x !== k).map(x => first(byKey[x])), projName(t.project));
+        sendPush(byKey[k], byName + ' assigned you a task', t.title);
         notified.push(k); emails++;
       });
       assignees.forEach(k => { if (k === assigner && notified.indexOf(k) < 0) notified.push(k); });
@@ -65,6 +68,29 @@ function runCheck() {
           invites++;
         }
       }
+
+      // (C) deadline push reminders — 1 day before, 1 hour before, and overdue
+      if (t.dueAt && assignees.length) {
+        const msLeft = t.dueAt - now;
+        let flags = Object.assign({}, t.pushFlags || {});
+        let changed = false;
+        if (flags.dueAt !== t.dueAt) { flags = {dueAt: t.dueAt}; changed = true; }
+        const when = Utilities.formatDate(new Date(t.dueAt), TZ, 'EEE d MMM, h:mm a');
+        if (!flags.day && msLeft > 0 && msLeft <= 24 * 60 * 60000) {
+          assignees.forEach(k => sendPush(byKey[k], 'Due tomorrow', t.title + ' — ' + when));
+          flags.day = true; changed = true;
+        }
+        if (!flags.hour && msLeft > 0 && msLeft <= 60 * 60000) {
+          assignees.forEach(k => sendPush(byKey[k], 'Due in an hour', t.title));
+          flags.hour = true; changed = true;
+        }
+        if (!flags.overdue && msLeft <= 0) {
+          assignees.forEach(k => sendPush(byKey[k], 'Overdue', t.title + ' was due ' + when));
+          flags.overdue = true; changed = true;
+        }
+        if (changed) patch.pushFlags = flags;
+      }
+
       if (Object.keys(patch).length) patchDoc('tasks/' + t._id, patch);
     });
 
@@ -125,6 +151,41 @@ function sendSummary(tasks, byKey) {
     '\n\nDue today (' + today.length + '):\n' + (today.map(line).join('\n') || '• Nothing due today') +
     '\n\nOpen tasks on the board: ' + open.length + "\n\nOpen Southie's HQ: " + APP_URL;
   MailApp.sendEmail({to: SUMMARY_TO, subject: "Southie's HQ · " + overdue.length + ' overdue, ' + today.length + ' due today', body: body, name: "Southie's HQ"});
+}
+
+/* ---------- push (FCM) ---------- */
+function sendPush(mem, title, body) {
+  const tokens = (mem && mem.pushTokens) || [];
+  if (!tokens.length) return;
+  const endpoint = 'https://fcm.googleapis.com/v1/projects/' + PROJECT_ID + '/messages:send';
+  const authHeader = 'Bearer ' + ScriptApp.getOAuthToken();
+  const bad = [];
+  tokens.forEach(tok => {
+    const payload = {message: {token: tok, notification: {title: title, body: body},
+      webpush: {fcmOptions: {link: APP_URL}, notification: {icon: APP_URL + 'icon-192.png'}}, data: {url: APP_URL}}};
+    let r;
+    try {
+      r = UrlFetchApp.fetch(endpoint, {method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+        headers: {Authorization: authHeader}, payload: JSON.stringify(payload)});
+    } catch (e) { return; }
+    const code = r.getResponseCode();
+    if (code === 404 || code === 400) {
+      const txt = r.getContentText();
+      if (txt.indexOf('UNREGISTERED') >= 0 || txt.indexOf('NOT_FOUND') >= 0 || txt.indexOf('INVALID_ARGUMENT') >= 0) bad.push(tok);
+    }
+  });
+  if (bad.length) removePushTokens(mem.key, bad);
+}
+function removePushTokens(memberKey, badTokens) {
+  try {
+    const team = getDoc('config/team');
+    if (!team || !team.members) return;
+    const members = team.members.map(m => {
+      if (m.key !== memberKey || !m.pushTokens) return m;
+      return Object.assign({}, m, {pushTokens: m.pushTokens.filter(t => badTokens.indexOf(t) < 0)});
+    });
+    patchDoc('config/team', {members: members});
+  } catch (e) { /* best-effort cleanup */ }
 }
 
 /* ---------- calendar ---------- */
