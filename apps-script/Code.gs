@@ -6,7 +6,7 @@
  *  - Sends Richard a morning summary once a day.
  *  - Clears live-event records older than 2 days.
  */
-const PROJECT_ID = 'FILL_ME';
+const PROJECT_ID = 'southies-hq';
 const APP_URL = 'https://southiesco-wq.github.io/hq/';
 const SUMMARY_TO = 'richatdjames0@gmail.com';
 const TZ = 'Asia/Kolkata';
