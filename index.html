@@ -61,6 +61,7 @@ button{cursor:pointer}
 .circ{width:46px;height:46px;flex:none;border-radius:50%;border:var(--b);box-shadow:var(--sh-sm);display:grid;place-items:center;background:var(--card);padding:0}
 .circ svg.ic{width:20px;height:20px;stroke:var(--ink);fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
 .circ.c-ember{background:var(--ember)} .circ.c-sun{background:var(--sun)} .circ.c-pink{background:var(--pink)} .circ.c-lilac{background:var(--lilac)} .circ.c-mint{background:var(--mint)} .circ.c-sky{background:var(--sky)}
+.circ.confirm{background:var(--ember)}
 .circ .buddy{width:38px;height:auto;margin-top:4px}
 .pagehead{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:12px}
 .pagehead h2{font-family:var(--display);font-weight:800;font-size:clamp(17px,4.6vw,21px);margin:0;text-align:center;letter-spacing:-.01em}
@@ -724,10 +725,14 @@ function fileRow(f){
   const thumbable = f.kind === "upload" && /^(image\/|application\/pdf)/.test(f.mimeType || "");
   const icon = f.kind === "link" ? "linkic" : "filedoc";
   const media = thumbable
-    ? `<img src="https://drive.google.com/thumbnail?id=${esc(f.driveFileId)}&sz=w100" alt="" style="width:44px;height:44px;object-fit:cover;border-radius:10px;border:2px solid var(--ink);flex:none">`
-    : `<span class="tick" style="cursor:default">${ic(icon,"")}</span>`;
-  return `<li class="task" data-openfile="${esc(f.id)}"><div class="slide" style="cursor:pointer">${media}
-    <div class="tbody"><div class="ttitle">${esc(f.name)}</div><div class="tmeta"><span class="chip">${esc(fileTagLabel(f.tag))}</span><span>${esc(first(member(f.addedBy)) || "Someone")} · ${esc(dayLabel(f.addedAt))}</span>${f.size ? `<span>${fmtSize(f.size)}</span>` : ""}</div></div>
+    ? `<img data-openfile="${esc(f.id)}" src="https://drive.google.com/thumbnail?id=${esc(f.driveFileId)}&sz=w100" alt="" style="width:44px;height:44px;object-fit:cover;border-radius:10px;border:2px solid var(--ink);flex:none;cursor:pointer">`
+    : `<span class="tick" data-openfile="${esc(f.id)}" style="cursor:pointer">${ic(icon,"")}</span>`;
+  const canRemove = state.canWrite && (f.addedByEmail === state.email || OWNERS.includes(state.email));
+  const removeBtn = (f.kind === "link" && canRemove)
+    ? `<button type="button" class="circ c-sun press" style="width:34px;height:34px" data-removefile="${esc(f.id)}" aria-label="Remove link" title="Remove link">${ic("x","")}</button>`
+    : "";
+  return `<li class="task"><div class="slide">${media}
+    <div class="tbody" data-openfile="${esc(f.id)}" style="cursor:pointer"><div class="ttitle">${esc(f.name)}</div><div class="tmeta"><span class="chip">${esc(fileTagLabel(f.tag))}</span><span>${esc(first(member(f.addedBy)) || "Someone")} · ${esc(dayLabel(f.addedAt))}</span>${f.size ? `<span>${fmtSize(f.size)}</span>` : ""}</div></div>${removeBtn}
   </div></li>`;
 }
 function uploadRow(u){
@@ -1213,15 +1218,33 @@ function openFileViewer(fileId){
     </div></div>`;
 }
 function closeViewer(){ $("#viewer").hidden = true; $("#viewer").innerHTML = ""; document.body.style.overflow = ""; }
-async function removeFile(fileId){
+async function removeFile(fileId, triggerEl){
   const f = state.files.find(x => x.id === fileId); if(!f) return;
-  const btn = $("#viewer-del");
-  if(!state.confirmRemoveFile){ state.confirmRemoveFile = true; if(btn){ btn.textContent = "Tap again to remove"; btn.classList.add("confirm"); } return; }
+  const btn = triggerEl || $("#viewer-del");
+  if(!state.confirmRemoveFile){
+    state.confirmRemoveFile = true;
+    const iconOnly = btn && btn.querySelector("svg");
+    if(btn){
+      if(iconOnly){ btn.title = "Tap again to remove"; btn.setAttribute("aria-label", "Tap again to remove"); }
+      else btn.textContent = "Tap again to remove";
+      btn.classList.add("confirm");
+    }
+    setTimeout(() => {
+      state.confirmRemoveFile = false;
+      if(btn){
+        if(iconOnly){ btn.title = "Remove link"; btn.setAttribute("aria-label", "Remove link"); }
+        else btn.textContent = "Remove";
+        btn.classList.remove("confirm");
+      }
+    }, 3000);
+    return;
+  }
   state.confirmRemoveFile = false;
   try{
     await state.db.doc(`files/${fileId}`).delete();
     if(f.kind === "upload" && f.driveFileId) relayCall("trashDriveFile", {driveFileId:f.driveFileId}).catch(() => {});
-    closeViewer(); toast(`${f.name} removed`);
+    if(!$("#viewer").hidden) closeViewer();
+    toast(`${f.name} removed`);
   }catch(er){ writeError(er); }
 }
 
@@ -1348,7 +1371,7 @@ document.addEventListener("click", e => {
   if((el = T("[data-cancelupload]"))){ delete state.uploads[el.dataset.cancelupload]; render(true); return; }
   if((el = T("[data-openfile]"))){ openFileViewer(el.dataset.openfile); return; }
   if((el = T("[data-closeviewer]"))){ closeViewer(); return; }
-  if((el = T("[data-removefile]"))){ removeFile(el.dataset.removefile); return; }
+  if((el = T("[data-removefile]"))){ removeFile(el.dataset.removefile, el); return; }
   if((el = T("[data-assign]"))){ openSheet(null, {list:"team", assignees:[el.dataset.assign]}); return; }
   if((el = T("[data-nudge]"))){ nudge(el.dataset.nudge); return; }
   if((el = T("[data-open]"))){ openSheet(el.dataset.open); return; }
