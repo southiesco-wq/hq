@@ -369,6 +369,7 @@ img{max-width:100%}
 <button id="fab" class="fab press" type="button" hidden aria-label="New task"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
 <nav class="nav" id="nav" aria-label="Sections" hidden></nav>
 <div id="layer" class="layer" hidden></div>
+<div id="viewer" class="layer" hidden></div>
 <div id="sheet" class="sheet" hidden><div class="scrim" data-close="1"></div><div class="panel" id="panel" role="dialog" aria-modal="true" aria-labelledby="sheet-title"></div></div>
 <div id="banner" class="banner" role="status" aria-live="polite"></div>
 <div id="modal" class="modal" hidden></div>
@@ -667,9 +668,36 @@ function pageCalendar(){
 function pageProjects(){
   return `${pageHead("Projects","c-sun")}
     <div><div class="eyebrow">Clients and our own brands</div><h1 class="big" style="margin-top:6px">Every project,<br>one shelf.</h1></div>
+    <button type="button" class="cta white press" data-go="allfiles" style="align-self:flex-start">${ic("filedoc","")}All files</button>
     <div class="folders">${projects().map(p => { const its = state.tasks.filter(t => t.project === p.key); const done = its.filter(t => t.status === "done").length; const ps = pstyle(p.key); const fresh = its.some(t => (t.createdAt || 0) > Date.now() - 2 * 864e5); return `<button type="button" class="folder press" style="--fc:${ps.c}" data-go="project" data-param="${esc(p.key)}"><div class="fh"><span class="fi">${ic(ps.i, ps.i === "mark" ? "ic" : "")}</span><span class="fc">${its.length - done} open${fresh ? `<br><span class="badge-new">NEW</span>` : ""}</span></div><span class="fn">${esc(p.name)}</span><div class="bar"><i style="width:${its.length ? done / its.length * 100 : 0}%"></i></div></button>`; }).join("")}
       ${state.canWrite ? `<button type="button" class="folder press addcard" style="--fc:var(--card);align-items:center;text-align:center" data-go="editproject" data-param="new"><span class="plusbig">+</span><span class="fn">Add a project</span></button>` : ""}</div>`;
 }
+function allFileRow(f){
+  const p = project(f.project);
+  const thumbable = f.kind === "upload" && /^(image\/|application\/pdf)/.test(f.mimeType || "");
+  const icon = f.kind === "link" ? "linkic" : "filedoc";
+  const media = thumbable
+    ? `<img src="https://drive.google.com/thumbnail?id=${esc(f.driveFileId)}&sz=w100" alt="" style="width:44px;height:44px;object-fit:cover;border-radius:10px;border:2px solid var(--ink);flex:none">`
+    : `<span class="tick" style="cursor:default">${ic(icon,"")}</span>`;
+  return `<li class="task" data-openfile="${esc(f.id)}"><div class="slide" style="cursor:pointer">${media}
+    <div class="tbody"><div class="ttitle">${esc(f.name)}</div><div class="tmeta"><span class="chip">${esc(fileTagLabel(f.tag))}</span><span>${esc(p ? p.name : "Removed project")}</span><span>${esc(first(member(f.addedBy)) || "Someone")} · ${esc(dayLabel(f.addedAt))}</span></div></div>
+  </div></li>`;
+}
+function afBody(){
+  const q = (state.allFilesSearch || "").trim().toLowerCase(), tag = state.fileTag || "all";
+  let items = state.files.slice();
+  if(tag !== "all") items = items.filter(f => f.tag === tag);
+  if(q) items = items.filter(f => { const p = project(f.project); return [f.name, p ? p.name : "Removed project", first(member(f.addedBy))].join(" ").toLowerCase().includes(q); });
+  items.sort((a,b) => (b.addedAt||0) - (a.addedAt||0));
+  return `<div class="scrollx" aria-label="Filter by tag"><button type="button" class="pill" data-filetag="all" aria-pressed="${tag === "all"}">All</button>${FILE_TAGS.map(([k,l]) => `<button type="button" class="pill" data-filetag="${k}" aria-pressed="${tag === k}">${l}</button>`).join("")}</div>
+    ${items.length ? `<ul class="tasks">${items.map(allFileRow).join("")}</ul>` : emptyBox("No files", q ? `Nothing found for "${state.allFilesSearch}".` : "Nothing uploaded yet.")}`;
+}
+function pageAllFiles(){
+  return `${pageHead("All files","c-sun")}
+    <label class="searchbox" for="af-input">${ic("search","")}<input type="text" id="af-input" autocomplete="off" placeholder="Search files, projects, people" value="${esc(state.allFilesSearch || "")}"></label>
+    <div id="af-body">${afBody()}</div>`;
+}
+function renderAllFilesResults(){ const b = $("#af-body"); if(b) b.innerHTML = afBody(); }
 function pageProject(key){
   const p = project(key); if(!p) return emptyBox("Not found", "That project isn't on the board any more.");
   const ps = pstyle(key), its = state.tasks.filter(t => t.project === key), done = its.filter(t => t.status === "done"), open = its.filter(t => t.status !== "done").sort(sortTasks);
@@ -961,6 +989,7 @@ function render(force){
   else if(r.name === "calendar") html += pageCalendar();
   else if(r.name === "projects") html += pageProjects();
   else if(r.name === "project") html += pageProject(r.param);
+  else if(r.name === "allfiles") html += pageAllFiles();
   else if(r.name === "team") html += pageTeam();
   else if(r.name === "member") html += pageMember(r.param);
   else if(r.name === "leaderboard") html += pageLeaderboard();
@@ -1088,6 +1117,114 @@ async function deleteTask(){
   catch(err){ writeError(err); }
 }
 
+/* ---------- add-file sheet ---------- */
+function openFileSheet(projectKey){
+  $("#panel").innerHTML = `
+    <div class="phdr"><h2 id="sheet-title">Add to Files</h2><button type="button" class="circ c-sun press" data-close="1" aria-label="Close" style="width:40px;height:40px">${ic("x")}</button></div>
+    <form id="fileform" style="display:flex;flex-direction:column;gap:16px" data-project="${esc(projectKey)}" novalidate>
+      <div class="opts" role="group" aria-label="Type"><label><input type="radio" name="fs-mode" value="upload" checked><span>Upload file</span></label><label><input type="radio" name="fs-mode" value="link"><span>Save link</span></label></div>
+      <div id="fs-upload-fields" class="fld"><span>File</span><input type="file" id="fs-file"></div>
+      <div id="fs-link-fields" class="fld" hidden><span>Link</span><input type="url" class="txt" id="fs-url" placeholder="https://…" autocomplete="off"></div>
+      <label class="fld"><span>Name</span><input type="text" class="txt" id="fs-name" maxlength="120" placeholder="e.g. Brand Book v2" autocomplete="off"></label>
+      <label class="fld"><span>Tag</span><select id="fs-tag">${FILE_TAGS.map(([k,l]) => `<option value="${k}">${l}</option>`).join("")}</select></label>
+      <div class="meta" id="fs-err" role="alert"></div>
+      <div class="actions"><button type="submit" class="btn primary press">Save</button></div>
+    </form>`;
+  $("#sheet").hidden = false;
+}
+async function saveFileForm(e){
+  e.preventDefault();
+  const form = e.target, project = form.dataset.project, err = $("#fs-err");
+  const mode = (document.querySelector('input[name="fs-mode"]:checked') || {}).value || "upload";
+  const tag = $("#fs-tag").value;
+  let name = $("#fs-name").value.trim();
+  if(mode === "link"){
+    const url = $("#fs-url").value.trim();
+    if(!/^https?:\/\//i.test(url)){ err.textContent = "Paste a valid link starting with http:// or https://"; $("#fs-url").focus(); return; }
+    if(!name) name = url;
+    try{
+      await state.db.collection("files").doc().set({name, project, tag, kind:"link", url, driveFileId:null, mimeType:null, size:null, addedBy: state.meKey || "", addedByEmail: state.email || "", addedAt: Date.now()});
+      closeSheet(); toast("Link saved");
+    }catch(er){ writeError(er); }
+    return;
+  }
+  const inp = $("#fs-file"), file = inp.files && inp.files[0];
+  if(!file){ err.textContent = "Choose a file to upload."; return; }
+  if(!name) name = file.name.replace(/\.[^.]+$/, "");
+  closeSheet();
+  queueUpload({file, project, name, tag});
+}
+
+/* ---------- Drive upload ---------- */
+let uploadSeq = 0;
+function queueUpload({file, project, name, tag}){
+  const id = "u" + (++uploadSeq);
+  state.uploads[id] = {id, name, project, tag, file, progress:0, status:"uploading"};
+  render(true);
+  runUpload(id);
+}
+async function runUpload(id){
+  const u = state.uploads[id]; if(!u) return;
+  u.status = "uploading"; u.progress = 0; render(true);
+  try{
+    const {uploadUrl} = await relayCall("getUploadUrl", {project:u.project, fileName:u.name, mimeType:u.file.type || "application/octet-stream"});
+    if(!uploadUrl) throw new Error("no upload url");
+    const driveFileId = await putToUploadUrl(uploadUrl, u.file, pct => { const cur = state.uploads[id]; if(cur){ cur.progress = pct; renderUploadProgress(id); } });
+    const {url} = await relayCall("finalizeUpload", {driveFileId});
+    await state.db.collection("files").doc().set({
+      name:u.name, project:u.project, tag:u.tag, kind:"upload", driveFileId,
+      url: url || `https://drive.google.com/file/d/${driveFileId}/view`,
+      mimeType:u.file.type || null, size:u.file.size || null,
+      addedBy: state.meKey || "", addedByEmail: state.email || "", addedAt: Date.now()
+    });
+    delete state.uploads[id]; render(true); toast(`${u.name} uploaded`);
+  }catch(e){ const cur = state.uploads[id]; if(cur){ cur.status = "error"; render(true); } }
+}
+function putToUploadUrl(url, file, onProgress){
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", url, true);
+    xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+    xhr.upload.onprogress = ev => { if(ev.lengthComputable) onProgress(Math.round(ev.loaded / ev.total * 100)); };
+    xhr.onload = () => {
+      if(xhr.status >= 200 && xhr.status < 300){ try{ resolve(JSON.parse(xhr.responseText).id); }catch(e){ reject(e); } }
+      else reject(new Error("upload failed " + xhr.status));
+    };
+    xhr.onerror = () => reject(new Error("network error"));
+    xhr.send(file);
+  });
+}
+function renderUploadProgress(id){ const el = document.querySelector(`[data-uploadbar="${id}"]`); if(el) el.style.width = (state.uploads[id] ? state.uploads[id].progress : 0) + "%"; }
+
+/* ---------- file viewer ---------- */
+function openFileViewer(fileId){
+  const f = state.files.find(x => x.id === fileId); if(!f) return;
+  if(f.kind === "link"){ window.open(f.url, "_blank", "noopener"); return; }
+  state.confirmRemoveFile = false;
+  const canRemove = state.canWrite && (f.addedByEmail === state.email || OWNERS.includes(state.email));
+  const L = $("#viewer"); L.hidden = false; document.body.style.overflow = "hidden";
+  L.innerHTML = `<div class="inner" style="gap:12px">
+    <div class="pagehead"><button type="button" class="circ c-sun press" data-closeviewer="1" aria-label="Close">${ic("x")}</button><h2 style="font-size:14px">${esc(f.name)}</h2><span></span></div>
+    <div style="border:var(--b);border-radius:18px;overflow:hidden;background:#000;box-shadow:var(--sh)"><iframe src="https://drive.google.com/file/d/${esc(f.driveFileId)}/preview" style="width:100%;height:60vh;border:0;display:block" allow="autoplay"></iframe></div>
+    <div class="actions">
+      <a class="btn press" href="https://drive.google.com/uc?export=download&id=${esc(f.driveFileId)}" target="_blank" rel="noopener">Download</a>
+      <a class="btn press" href="${esc(f.url)}" target="_blank" rel="noopener">Open in Drive</a>
+      ${canRemove ? `<button type="button" class="btn danger press" id="viewer-del" data-removefile="${esc(f.id)}">Remove</button>` : ""}
+    </div></div>`;
+}
+function closeViewer(){ $("#viewer").hidden = true; $("#viewer").innerHTML = ""; document.body.style.overflow = ""; }
+async function removeFile(fileId){
+  const f = state.files.find(x => x.id === fileId); if(!f) return;
+  const btn = $("#viewer-del");
+  if(!state.confirmRemoveFile){ state.confirmRemoveFile = true; if(btn){ btn.textContent = "Tap again to remove"; btn.classList.add("confirm"); } return; }
+  state.confirmRemoveFile = false;
+  try{
+    await state.db.doc(`files/${fileId}`).delete();
+    if(f.kind === "upload" && f.driveFileId) relayCall("trashDriveFile", {driveFileId:f.driveFileId}).catch(() => {});
+    closeViewer(); toast(`${f.name} removed`);
+  }catch(er){ writeError(er); }
+}
+
 /* ---------- status, confetti, live moments ---------- */
 function confetti(x, y){
   if(matchMedia("(prefers-reduced-motion: reduce)").matches) return;
@@ -1206,6 +1343,12 @@ document.addEventListener("click", e => {
   if((el = T("[data-mdone]"))){ state.mineDone = el.dataset.mdone === "1"; render(true); return; }
   if((el = T("[data-ptab]"))){ state.filesTab = el.dataset.ptab; state.fileTag = "all"; render(true); return; }
   if((el = T("[data-filetag]"))){ state.fileTag = el.dataset.filetag; if(route().name === "allfiles") renderAllFilesResults(); else render(true); return; }
+  if((el = T("[data-addfile]"))){ openFileSheet(el.dataset.addfile); return; }
+  if((el = T("[data-retryupload]"))){ runUpload(el.dataset.retryupload); return; }
+  if((el = T("[data-cancelupload]"))){ delete state.uploads[el.dataset.cancelupload]; render(true); return; }
+  if((el = T("[data-openfile]"))){ openFileViewer(el.dataset.openfile); return; }
+  if((el = T("[data-closeviewer]"))){ closeViewer(); return; }
+  if((el = T("[data-removefile]"))){ removeFile(el.dataset.removefile); return; }
   if((el = T("[data-assign]"))){ openSheet(null, {list:"team", assignees:[el.dataset.assign]}); return; }
   if((el = T("[data-nudge]"))){ nudge(el.dataset.nudge); return; }
   if((el = T("[data-open]"))){ openSheet(el.dataset.open); return; }
@@ -1224,14 +1367,14 @@ document.addEventListener("click", e => {
   if(T("#qa-lock")){ e.preventDefault(); state.qaPrivate = !state.qaPrivate; const b = $("#qa-lock"); b.setAttribute("aria-pressed", String(qaPrivate())); $("#qa-input").placeholder = qaPrivate() ? "Add to your private list" : "Add a task…"; renderQaChips(); return; }
   if(T("#qa-add")){ quickAdd(); return; }
 }, true);
-document.addEventListener("input", e => { if(e.target.id === "qa-input") renderQaChips(); if(e.target.id === "s-input"){ state.search = e.target.value; renderSearch(); } if(e.target.id === "m-name" || e.target.id === "m-role") syncEditPreview(); if(e.target.id === "p-name") syncEditProjectPreview(); });
+document.addEventListener("input", e => { if(e.target.id === "qa-input") renderQaChips(); if(e.target.id === "s-input"){ state.search = e.target.value; renderSearch(); } if(e.target.id === "m-name" || e.target.id === "m-role") syncEditPreview(); if(e.target.id === "p-name") syncEditProjectPreview(); if(e.target.id === "fs-file"){ const nm = $("#fs-name"); const f = e.target.files && e.target.files[0]; if(nm && !nm.value.trim() && f) nm.value = f.name.replace(/\.[^.]+$/, ""); } if(e.target.id === "af-input"){ state.allFilesSearch = e.target.value; renderAllFilesResults(); } });
 document.addEventListener("keydown", e => {
-  if(e.key === "Escape"){ if(!$("#modal").hidden) $("#modal").hidden = true; else if(!$("#sheet").hidden) closeSheet(); else if(!$("#layer").hidden) closeLayer(); }
+  if(e.key === "Escape"){ if(!$("#modal").hidden) $("#modal").hidden = true; else if(!$("#viewer").hidden) closeViewer(); else if(!$("#sheet").hidden) closeSheet(); else if(!$("#layer").hidden) closeLayer(); }
   if(e.key === "Enter" && e.target.id === "qa-input"){ e.preventDefault(); quickAdd(); }
 });
 document.addEventListener("focusout", e => { if(e.target.id === "qa-input" && state.pending && !e.target.value){ state.pending = false; setTimeout(render, 0); } });
-document.addEventListener("change", e => { if(e.target.name === "f-list"){ const w = $("#assign-wrap"); if(w) w.hidden = e.target.value === "private"; } if(e.target.name === "m-color" || e.target.name === "m-acc") syncEditPreview(); if(e.target.name === "p-color" || e.target.name === "p-icon") syncEditProjectPreview(); });
-document.addEventListener("submit", e => { if(e.target.id === "tform") saveTask(e); else if(e.target.id === "cform") postComment(e); else if(e.target.id === "mform") saveMember(e); else if(e.target.id === "pform") saveProject(e); });
+document.addEventListener("change", e => { if(e.target.name === "f-list"){ const w = $("#assign-wrap"); if(w) w.hidden = e.target.value === "private"; } if(e.target.name === "m-color" || e.target.name === "m-acc") syncEditPreview(); if(e.target.name === "p-color" || e.target.name === "p-icon") syncEditProjectPreview(); if(e.target.name === "fs-mode"){ const up = e.target.value === "upload"; $("#fs-upload-fields").hidden = !up; $("#fs-link-fields").hidden = up; } });
+document.addEventListener("submit", e => { if(e.target.id === "tform") saveTask(e); else if(e.target.id === "cform") postComment(e); else if(e.target.id === "mform") saveMember(e); else if(e.target.id === "pform") saveProject(e); else if(e.target.id === "fileform") saveFileForm(e); });
 setInterval(() => { document.querySelectorAll("[data-countdown]").forEach(el => el.innerHTML = cdHtml(+el.dataset.countdown)); }, 15000);
 setInterval(() => { if(state.ready && !state.sheet) render(); }, 60000);
 
