@@ -103,6 +103,11 @@ function runCheck() {
       props.setProperty('lastSummary', today);
     }
 
+    if (hour >= 3 && hour < 4 && props.getProperty('lastFileSweep') !== today) {
+      sweepOrphanUploads(team);
+      props.setProperty('lastFileSweep', today);
+    }
+
     // housekeeping: live events older than 2 days
     listDocs('events').forEach(e => { if (e.ms && now - e.ms > 2 * 864e5) deleteDoc('events/' + e._id); });
     console.log('emails ' + emails + ', invites ' + invites);
@@ -186,6 +191,101 @@ function removePushTokens(memberKey, badTokens) {
     });
     patchDoc('config/team', {members: members});
   } catch (e) { /* best-effort cleanup */ }
+}
+
+/* ---------- files (Drive + web endpoint) ---------- */
+const FILES_FOLDER_NAME = "Southie's HQ Files";
+const RELAY_MAX_AGE_MS = 30000;
+
+function doPost(e) {
+  try {
+    const body = JSON.parse((e.postData && e.postData.contents) || '{}');
+    const uid = body.uid;
+    if (!uid) return jsonOut({error: 'missing_uid'});
+    const relay = getDoc('relay/' + uid);
+    if (!relay || relay.nonce !== body.nonce) return jsonOut({error: 'bad_nonce'});
+    if (Date.now() - (relay.ts || 0) > RELAY_MAX_AGE_MS) return jsonOut({error: 'expired'});
+    const team = getDoc('config/team');
+    const email = String(relay.email || '').toLowerCase();
+    if (!team || (team.emails || []).indexOf(email) < 0) return jsonOut({error: 'not_team'});
+    deleteDoc('relay/' + uid); // single-use, so a captured request can't be replayed
+    const action = relay.action;
+    if (action === 'getUploadUrl') return jsonOut(handleGetUploadUrl(relay, team));
+    if (action === 'finalizeUpload') return jsonOut(handleFinalizeUpload(relay));
+    if (action === 'trashDriveFile') return jsonOut(handleTrashDriveFile(relay));
+    return jsonOut({error: 'unknown_action'});
+  } catch (err) {
+    return jsonOut({error: 'server_error', message: String(err)});
+  }
+}
+function jsonOut(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
+}
+function ensureRootFolder(team) {
+  if (team.filesRootFolderId) {
+    try { return DriveApp.getFolderById(team.filesRootFolderId); } catch (e) { /* fall through and recreate */ }
+  }
+  const f = DriveApp.createFolder(FILES_FOLDER_NAME);
+  patchDoc('config/team', {filesRootFolderId: f.getId()});
+  return f;
+}
+function ensureProjectFolder(team, projectKey) {
+  const root = ensureRootFolder(team);
+  const projects = team.projects || [];
+  let idx = -1;
+  for (let i = 0; i < projects.length; i++) if (projects[i].key === projectKey) { idx = i; break; }
+  if (idx < 0) throw new Error('unknown_project');
+  if (projects[idx].driveFolderId) {
+    try { return DriveApp.getFolderById(projects[idx].driveFolderId); } catch (e) { /* fall through and recreate */ }
+  }
+  const folder = root.createFolder(projects[idx].name || projectKey);
+  const projects2 = projects.map((p, i) => i === idx ? Object.assign({}, p, {driveFolderId: folder.getId()}) : p);
+  patchDoc('config/team', {projects: projects2});
+  return folder;
+}
+function handleGetUploadUrl(relay, team) {
+  const folder = ensureProjectFolder(team, relay.project);
+  const r = UrlFetchApp.fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id', {
+    method: 'post', muteHttpExceptions: true, contentType: 'application/json; charset=UTF-8',
+    headers: {Authorization: 'Bearer ' + ScriptApp.getOAuthToken(), 'X-Upload-Content-Type': relay.mimeType || 'application/octet-stream'},
+    payload: JSON.stringify({name: relay.fileName, parents: [folder.getId()]})
+  });
+  if (r.getResponseCode() >= 300) return {error: 'drive_init_failed', message: r.getContentText().slice(0, 300)};
+  const headers = r.getHeaders();
+  const loc = headers['Location'] || headers['location'];
+  if (!loc) return {error: 'no_session_url'};
+  return {uploadUrl: loc};
+}
+function handleFinalizeUpload(relay) {
+  const id = relay.driveFileId;
+  if (!id) return {error: 'missing_file_id'};
+  try {
+    DriveApp.getFileById(id).setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    return {url: 'https://drive.google.com/file/d/' + id + '/view'};
+  } catch (e) { return {error: 'finalize_failed', message: String(e)}; }
+}
+function handleTrashDriveFile(relay) {
+  const id = relay.driveFileId;
+  if (!id) return {ok: true};
+  try { DriveApp.getFileById(id).setTrashed(true); } catch (e) { /* already gone — fine */ }
+  return {ok: true};
+}
+function sweepOrphanUploads(team) {
+  if (!team.filesRootFolderId) return;
+  const known = {};
+  listDocs('files').forEach(f => { if (f.driveFileId) known[f.driveFileId] = true; });
+  const cutoff = Date.now() - 60 * 60000;
+  (team.projects || []).forEach(p => {
+    if (!p.driveFolderId) return;
+    let folder;
+    try { folder = DriveApp.getFolderById(p.driveFolderId); } catch (e) { return; }
+    const it = folder.getFiles();
+    while (it.hasNext()) {
+      const f = it.next();
+      if (known[f.getId()]) continue;
+      if (f.getDateCreated().getTime() < cutoff) { try { f.setTrashed(true); } catch (e) { /* best effort */ } }
+    }
+  });
 }
 
 /* ---------- calendar ---------- */
