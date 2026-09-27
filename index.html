@@ -678,9 +678,33 @@ function pageProject(key){
   return `${pageHead(p.name, "c-sun")}
     <section class="phero" style="--fc:${ps.c}"><div><div class="eyebrow">${p.kind === "client" ? "Client" : p.kind === "own" ? "Our brand" : "Studio"}</div><h1 class="big" style="margin-top:6px">${pct}%</h1><div class="role">${done.length} of ${its.length} tasks done</div><div class="faces" style="margin-top:10px">${people.map(k => face(k)).join("")}</div></div><span class="fi" style="width:84px;height:84px;border:var(--b);border-radius:22px;background:var(--card);display:grid;place-items:center;box-shadow:var(--sh-sm)">${bigIcon(ps.i)}</span></section>
     ${state.canWrite ? `<div class="actions"><button type="button" class="cta white press" data-go="editproject" data-param="${esc(key)}">Edit details</button></div>` : ""}
-    ${qaBlock({placeholder:`Add to ${p.name}`, project:key})}
+    <div class="seg" role="group" aria-label="Section" style="align-self:flex-start"><button type="button" data-ptab="tasks" aria-pressed="${state.filesTab !== "files"}">Tasks</button><button type="button" data-ptab="files" aria-pressed="${state.filesTab === "files"}">Files</button></div>
+    ${state.filesTab === "files" ? filesSection(key) : `${qaBlock({placeholder:`Add to ${p.name}`, project:key})}
     ${open.length ? group("Open", open) : emptyBox("All wrapped", "No open tasks on this project.")}
-    ${group("Done", done.sort((a,b) => (b.doneAt||0) - (a.doneAt||0)).slice(0,8))}`;
+    ${group("Done", done.sort((a,b) => (b.doneAt||0) - (a.doneAt||0)).slice(0,8))}`}`;
+}
+function filesSection(key){
+  const all = filesFor(key), tag = state.fileTag || "all";
+  const items = (tag === "all" ? all : all.filter(f => f.tag === tag)).slice().sort((a,b) => (b.addedAt||0) - (a.addedAt||0));
+  const inflight = Object.values(state.uploads).filter(u => u.project === key);
+  return `<div class="scrollx" aria-label="Filter by tag"><button type="button" class="pill" data-filetag="all" aria-pressed="${tag === "all"}">All</button>${FILE_TAGS.map(([k,l]) => `<button type="button" class="pill" data-filetag="${k}" aria-pressed="${tag === k}">${l}</button>`).join("")}</div>
+    ${state.canWrite ? `<button type="button" class="cta press" data-addfile="${esc(key)}" style="align-self:flex-start">+ Add</button>` : ""}
+    ${inflight.map(uploadRow).join("")}
+    ${items.length ? `<ul class="tasks">${items.map(fileRow).join("")}</ul>` : (inflight.length ? "" : emptyBox("No files yet", "Proposals, plans, reports, brand books and logos for this project will show up here."))}`;
+}
+function fileRow(f){
+  const thumbable = f.kind === "upload" && /^(image\/|application\/pdf)/.test(f.mimeType || "");
+  const icon = f.kind === "link" ? "linkic" : "filedoc";
+  const media = thumbable
+    ? `<img src="https://drive.google.com/thumbnail?id=${esc(f.driveFileId)}&sz=w100" alt="" style="width:44px;height:44px;object-fit:cover;border-radius:10px;border:2px solid var(--ink);flex:none">`
+    : `<span class="tick" style="cursor:default">${ic(icon,"")}</span>`;
+  return `<li class="task" data-openfile="${esc(f.id)}"><div class="slide" style="cursor:pointer">${media}
+    <div class="tbody"><div class="ttitle">${esc(f.name)}</div><div class="tmeta"><span class="chip">${esc(fileTagLabel(f.tag))}</span><span>${esc(first(member(f.addedBy)) || "Someone")} · ${esc(dayLabel(f.addedAt))}</span>${f.size ? `<span>${fmtSize(f.size)}</span>` : ""}</div></div>
+  </div></li>`;
+}
+function uploadRow(u){
+  if(u.status === "error") return `<div class="empty" style="text-align:left;padding:14px 16px"><b>Upload failed</b>${esc(u.name)}<div class="actions" style="margin-top:8px"><button type="button" class="btn press" data-retryupload="${esc(u.id)}">Retry</button><button type="button" class="btn danger press" data-cancelupload="${esc(u.id)}">Remove</button></div></div>`;
+  return `<div class="nb" style="padding:12px 14px"><div class="tmeta" style="margin-bottom:6px">${esc(u.name)} · uploading…</div><div class="bar"><i data-uploadbar="${esc(u.id)}" style="width:${u.progress || 0}%;background:var(--sun)"></i></div></div>`;
 }
 function pageTeam(){
   return `${pageHead("The team","c-mint")}
@@ -949,7 +973,7 @@ function render(force){
   if($("#cols")) $("#cols").scrollLeft = cs;
   if($("#qa-input")) renderQaChips();
 }
-function go(name, param){ state.stack.push({name, param}); state.memberTab = "open"; render(true); window.scrollTo(0,0); animateIn(); }
+function go(name, param){ state.stack.push({name, param}); state.memberTab = "open"; state.filesTab = "tasks"; state.fileTag = "all"; render(true); window.scrollTo(0,0); animateIn(); }
 function back(){ if(state.stack.length > 1) state.stack.pop(); render(true); window.scrollTo(0,0); animateIn(); }
 function tab(name){ state.stack = [{name}]; render(true); window.scrollTo(0,0); animateIn(); }
 function animateIn(){ const m = $("#main"); m.classList.remove("page-in"); void m.offsetWidth; m.classList.add("page-in"); }
@@ -1180,6 +1204,8 @@ document.addEventListener("click", e => {
   if((el = T("[data-lb]"))){ state.lbRange = el.dataset.lb; render(true); return; }
   if((el = T("[data-mtab]"))){ state.memberTab = el.dataset.mtab; render(true); return; }
   if((el = T("[data-mdone]"))){ state.mineDone = el.dataset.mdone === "1"; render(true); return; }
+  if((el = T("[data-ptab]"))){ state.filesTab = el.dataset.ptab; state.fileTag = "all"; render(true); return; }
+  if((el = T("[data-filetag]"))){ state.fileTag = el.dataset.filetag; if(route().name === "allfiles") renderAllFilesResults(); else render(true); return; }
   if((el = T("[data-assign]"))){ openSheet(null, {list:"team", assignees:[el.dataset.assign]}); return; }
   if((el = T("[data-nudge]"))){ nudge(el.dataset.nudge); return; }
   if((el = T("[data-open]"))){ openSheet(el.dataset.open); return; }
