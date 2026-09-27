@@ -196,6 +196,9 @@ function removePushTokens(memberKey, badTokens) {
 /* ---------- files (Drive + web endpoint) ---------- */
 const FILES_FOLDER_NAME = "Southie's HQ Files";
 const RELAY_MAX_AGE_MS = 30000;
+// Keep in sync with OWNERS in index.html and isOwner() in firestore.rules —
+// owners are always team members even if they're not in config/team.emails.
+const OWNER_EMAILS = ["richatdjames0@gmail.com", "southies.co@gmail.com"];
 
 function doPost(e) {
   try {
@@ -207,7 +210,8 @@ function doPost(e) {
     if (Date.now() - (relay.ts || 0) > RELAY_MAX_AGE_MS) return jsonOut({error: 'expired'});
     const team = getDoc('config/team');
     const email = String(relay.email || '').toLowerCase();
-    if (!team || (team.emails || []).indexOf(email) < 0) return jsonOut({error: 'not_team'});
+    const isTeamMember = OWNER_EMAILS.indexOf(email) >= 0 || (team && (team.emails || []).indexOf(email) >= 0);
+    if (!isTeamMember) return jsonOut({error: 'not_team'});
     deleteDoc('relay/' + uid); // single-use, so a captured request can't be replayed
     const action = relay.action;
     if (action === 'getUploadUrl') return jsonOut(handleGetUploadUrl(relay, team));
