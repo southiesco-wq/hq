@@ -21,5 +21,16 @@ service cloud.firestore {
       allow read, write: if isTeam() && request.auth.uid == uid;
       match /tasks/{taskId} { allow read, write: if isTeam() && request.auth.uid == uid; }
     }
+    match /files/{fileId} {
+      allow read, create: if isTeam();
+      allow delete: if isTeam() &&
+        (myEmail() == resource.data.addedByEmail || isOwner());
+      allow update: if false;
+    }
+    match /relay/{uid} {
+      allow read: if false;
+      allow write: if request.auth.uid == uid && isTeam() &&
+        request.resource.data.email == myEmail();
+    }
   }
 }
