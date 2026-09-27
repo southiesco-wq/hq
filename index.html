@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#FFC83D">
 <meta name="apple-mobile-web-app-title" content="Southie's HQ">
 <meta name="application-name" content="Southie's HQ">
@@ -27,7 +27,7 @@
   --mono:"Space Mono",ui-monospace,Menlo,monospace;
 }
 *{box-sizing:border-box}
-html,body{background:var(--paper)}
+html,body{background:var(--paper);touch-action:manipulation;overscroll-behavior:none;height:100%}
 body{color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.45;padding-inline:16px;padding-block:12px 150px;background-image:radial-gradient(var(--dot) 1.3px,transparent 1.4px);background-size:20px 20px;-webkit-tap-highlight-color:transparent}
 button,input,select,textarea{font:inherit;color:inherit}
 button{cursor:pointer}
