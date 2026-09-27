@@ -729,7 +729,7 @@ function fileRow(f){
     : `<span class="tick" data-openfile="${esc(f.id)}" style="cursor:pointer">${ic(icon,"")}</span>`;
   const canRemove = state.canWrite && (f.addedByEmail === state.email || OWNERS.includes(state.email));
   const removeBtn = (f.kind === "link" && canRemove)
-    ? `<button type="button" class="circ c-sun press" style="width:34px;height:34px" data-removefile="${esc(f.id)}" aria-label="Remove link" title="Remove link">${ic("x","")}</button>`
+    ? `<button type="button" class="circ c-sun press" style="width:34px;height:34px" data-removefile="${esc(f.id)}" aria-label="Remove link" title="Remove link">${ic("x")}</button>`
     : "";
   return `<li class="task"><div class="slide">${media}
     <div class="tbody" data-openfile="${esc(f.id)}" style="cursor:pointer"><div class="ttitle">${esc(f.name)}</div><div class="tmeta"><span class="chip">${esc(fileTagLabel(f.tag))}</span><span>${esc(first(member(f.addedBy)) || "Someone")} · ${esc(dayLabel(f.addedAt))}</span>${f.size ? `<span>${fmtSize(f.size)}</span>` : ""}</div></div>${removeBtn}
