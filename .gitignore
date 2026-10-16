@@ -1,0 +1,4 @@
+scratch/
+.build/
+Mono Maker.app/
+*.zip

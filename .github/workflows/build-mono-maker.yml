@@ -1,0 +1,38 @@
+name: Build Mono Maker
+
+on:
+  push:
+    branches: [mono-maker]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: |
+          sw_vers
+          xcode-select -p
+          xcrun swiftc --version
+
+      - name: Build the app
+        run: bash build.command
+
+      - name: Smoke test (app launches and stays up)
+        run: |
+          file "Mono Maker.app/Contents/MacOS/MonoMaker"
+          "Mono Maker.app/Contents/MacOS/MonoMaker" &
+          PID=$!
+          sleep 8
+          if kill -0 $PID 2>/dev/null; then echo "App is running"; kill $PID; else echo "App exited early"; wait $PID; exit 1; fi
+
+      - name: Package
+        run: ditto -c -k --sequesterRsrc --keepParent "Mono Maker.app" "Mono-Maker.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Mono-Maker
+          path: Mono-Maker.zip
+          retention-days: 30
