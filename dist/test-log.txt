@@ -1,0 +1,264 @@
+ProductName:		macOS
+ProductVersion:		14.8.9
+BuildVersion:		23J631
+total 37616
+drwxr-xr-x  15 runner  staff      480 Oct 16 01:50 .
+drwxr-xr-x   6 runner  staff      192 Oct 16 01:50 ..
+-rw-r--r--   1 runner  staff  1035658 Oct 16 01:50 aac_51.mp4
+-rw-r--r--   1 runner  staff  1065409 Oct 16 01:50 hevc_alac.mov
+-rw-r--r--   1 runner  staff   843086 Oct 16 01:50 left_only.mov
+-rw-r--r--   1 runner  staff   794195 Oct 16 01:50 mono_441.mov
+-rw-r--r--   1 runner  staff   859137 Oct 16 01:50 mp3.mov
+-rw-r--r--   1 runner  staff  1728078 Oct 16 01:50 noisy_stereo.wav
+-rw-r--r--   1 runner  staff   798117 Oct 16 01:50 opus.mp4
+-rw-r--r--   1 runner  staff  5299641 Oct 16 01:50 pcm24_4ch.mov
+-rw-r--r--   1 runner  staff   842316 Oct 16 01:50 phase.mov
+-rw-r--r--   1 runner  staff   302082 Oct 16 01:50 speech.aiff
+-rw-r--r--   1 runner  staff   864078 Oct 16 01:50 speech.wav
+-rw-r--r--   1 runner  staff   925363 Oct 16 01:50 stereo_aac.mov
+-rw-r--r--   1 runner  staff  3890297 Oct 16 01:50 two_tracks.mov
+== stereo_aac.mov 
+analysis: channels=2 left=-16.7 dB right=-16.7 dB auto=mix (Left and right are identical. Auto keeps that sound.)
+progress: Saving 99%
+progress: Saving 100%
+converted: source=mix channels=1 cleanup=[] -> stereo_aac_mono.mov
+  channels=1 audio=8.0 video=8.0 shift=0ms peak=0.78 noise_floor=-37.1dB speech=-16.0dB gap=21.1dB
+== stereo_aac.mov --both
+analysis: channels=2 left=-16.7 dB right=-16.7 dB auto=mix (Left and right are identical. Auto keeps that sound.)
+progress: Saving 99%
+progress: Saving 100%
+converted: source=mix channels=2 cleanup=[] -> stereo_aac_both.mov
+  channels=2 audio=8.0 video=8.0 shift=0ms peak=1.10 noise_floor=-34.1dB speech=-13.0dB gap=21.1dB
+  PROBLEMS: clipping, peak 1.101
+== stereo_aac.mov --enhance --loud
+analysis: channels=2 left=-16.7 dB right=-16.7 dB auto=mix (Left and right are identical. Auto keeps that sound.)
+progress: Cleaning up the sound 0%
+progress: Cleaning up the sound 26%
+progress: Cleaning up the sound 51%
+progress: Cleaning up the sound 75%
+FAILED: Couldn't save the new video. The cleaned sound couldn't be read back.
+  CONVERSION FAILED
+== left_only.mov 
+analysis: channels=2 left=-16.7 dB right=-120.0 dB auto=left (Sound is only on the left. Auto uses the left channel.)
+progress: Saving 99%
+progress: Saving 100%
+converted: source=left channels=1 cleanup=[] -> left_only_mono.mov
+  channels=1 audio=8.0 video=8.0 shift=0ms peak=0.76 noise_floor=-180.0dB speech=-16.0dB gap=164.0dB
+== left_only.mov --both
+analysis: channels=2 left=-16.7 dB right=-120.0 dB auto=left (Sound is only on the left. Auto uses the left channel.)
+progress: Saving 99%
+progress: Saving 100%
+converted: source=left channels=2 cleanup=[] -> left_only_both.mov
+  channels=2 audio=8.0 video=8.0 shift=0ms peak=1.09 noise_floor=-180.0dB speech=-13.0dB gap=167.0dB
+  PROBLEMS: clipping, peak 1.086
+== left_only.mov --enhance --loud
+analysis: channels=2 left=-16.7 dB right=-120.0 dB auto=left (Sound is only on the left. Auto uses the left channel.)
+progress: Cleaning up the sound 0%
+progress: Cleaning up the sound 25%
+progress: Cleaning up the sound 50%
+progress: Cleaning up the sound 75%
+FAILED: Couldn't save the new video. The cleaned sound couldn't be read back.
+  CONVERSION FAILED
+== pcm24_4ch.mov 
+analysis: channels=4 left=-12.0 dB right=-12.0 dB auto=mix (Left and right are identical. Auto keeps that sound.)
+progress: Saving 99%
+progress: Saving 100%
+converted: source=mix channels=1 cleanup=[] -> pcm24_4ch_mono.mov
+  channels=1 audio=7.936 video=8.0 shift=0ms peak=1.33 noise_floor=-180.0dB speech=-11.3dB gap=168.7dB
+  PROBLEMS: clipping, peak 1.327
+== pcm24_4ch.mov --both
+analysis: channels=4 left=-12.0 dB right=-12.0 dB auto=mix (Left and right are identical. Auto keeps that sound.)
+progress: Saving 99%
+progress: Saving 100%
+converted: source=mix channels=2 cleanup=[] -> pcm24_4ch_both.mov
+  channels=2 audio=7.936 video=8.0 shift=0ms peak=1.88 noise_floor=-180.0dB speech=-8.3dB gap=171.7dB
+  PROBLEMS: clipping, peak 1.882
+== pcm24_4ch.mov --enhance --loud
+analysis: channels=4 left=-12.0 dB right=-12.0 dB auto=mix (Left and right are identical. Auto keeps that sound.)
+progress: Cleaning up the sound 0%
+progress: Cleaning up the sound 25%
+progress: Cleaning up the sound 50%
+progress: Cleaning up the sound 76%
+FAILED: Couldn't save the new video. The cleaned sound couldn't be read back.
+  CONVERSION FAILED
+== aac_51.mp4 
+analysis: channels=6 left=-10.5 dB right=-10.5 dB auto=mix (Left and right are identical. Auto keeps that sound.)
+progress: Saving 99%
+progress: Saving 100%
+converted: source=mix channels=1 cleanup=[] -> aac_51_mono.mp4
+  channels=1 audio=8.0 video=8.0 shift=0ms peak=1.59 noise_floor=-180.0dB speech=-9.7dB gap=170.3dB
+  PROBLEMS: clipping, peak 1.594
+== aac_51.mp4 --both
+analysis: channels=6 left=-10.5 dB right=-10.5 dB auto=mix (Left and right are identical. Auto keeps that sound.)
+progress: Saving 99%
+progress: Saving 100%
+converted: source=mix channels=2 cleanup=[] -> aac_51_both.mp4
+  channels=2 audio=8.0 video=8.0 shift=0ms peak=2.25 noise_floor=-180.0dB speech=-6.7dB gap=173.3dB
+  PROBLEMS: clipping, peak 2.251
+== aac_51.mp4 --enhance --loud
+analysis: channels=6 left=-10.5 dB right=-10.5 dB auto=mix (Left and right are identical. Auto keeps that sound.)
+progress: Cleaning up the sound 1%
+progress: Cleaning up the sound 25%
+progress: Cleaning up the sound 51%
+progress: Cleaning up the sound 75%
+FAILED: Couldn't save the new video. The cleaned sound couldn't be read back.
+  CONVERSION FAILED
+== mono_441.mov 
+analysis: channels=1 left=-16.7 dB right=-16.7 dB auto=mix (Already mono. Converting keeps the sound as it is.)
+progress: Saving 99%
+progress: Saving 100%
+converted: source=mix channels=1 cleanup=[] -> mono_441_mono.mov
+  channels=1 audio=7.987664 video=8.0 shift=0ms peak=0.76 noise_floor=-180.0dB speech=-16.0dB gap=164.0dB
+== mono_441.mov --both
+analysis: channels=1 left=-16.7 dB right=-16.7 dB auto=mix (Already mono. Converting keeps the sound as it is.)
+progress: Saving 99%
+progress: Saving 100%
+converted: source=mix channels=2 cleanup=[] -> mono_441_both.mov
+  channels=2 audio=7.987664 video=8.0 shift=0ms peak=1.07 noise_floor=-180.0dB speech=-13.0dB gap=167.0dB
+  PROBLEMS: clipping, peak 1.072
+== mono_441.mov --enhance --loud
+analysis: channels=1 left=-16.7 dB right=-16.7 dB auto=mix (Already mono. Converting keeps the sound as it is.)
+progress: Cleaning up the sound 1%
+progress: Cleaning up the sound 25%
+progress: Cleaning up the sound 50%
+progress: Cleaning up the sound 75%
+FAILED: Couldn't save the new video. The cleaned sound couldn't be read back.
+  CONVERSION FAILED
+== two_tracks.mov 
+analysis: channels=4 left=-9.0 dB right=-9.0 dB auto=mix (Left and right are identical. Auto keeps that sound.)
+progress: Saving 99%
+progress: Saving 100%
+converted: source=mix channels=1 cleanup=[] -> two_tracks_mono.mov
+  channels=1 audio=7.936 video=8.0 shift=0ms peak=1.88 noise_floor=-180.0dB speech=-8.3dB gap=171.7dB
+  PROBLEMS: clipping, peak 1.876
+== two_tracks.mov --both
+analysis: channels=4 left=-9.0 dB right=-9.0 dB auto=mix (Left and right are identical. Auto keeps that sound.)
+progress: Saving 99%
+progress: Saving 100%
+converted: source=mix channels=2 cleanup=[] -> two_tracks_both.mov
+  channels=2 audio=7.936 video=8.0 shift=0ms peak=2.66 noise_floor=-180.0dB speech=-5.3dB gap=174.7dB
+  PROBLEMS: clipping, peak 2.662
+== two_tracks.mov --enhance --loud
+analysis: channels=4 left=-9.0 dB right=-9.0 dB auto=mix (Left and right are identical. Auto keeps that sound.)
+progress: Cleaning up the sound 1%
+progress: Cleaning up the sound 26%
+progress: Cleaning up the sound 51%
+progress: Cleaning up the sound 75%
+FAILED: Couldn't save the new video. The cleaned sound couldn't be read back.
+  CONVERSION FAILED
+== hevc_alac.mov 
+analysis: channels=2 left=-16.6 dB right=-16.6 dB auto=mix (Left and right are identical. Auto keeps that sound.)
+progress: Saving 99%
+progress: Saving 100%
+converted: source=mix channels=1 cleanup=[] -> hevc_alac_mono.mov
+  channels=1 audio=7.936 video=8.0 shift=0ms peak=0.78 noise_floor=-37.1dB speech=-16.0dB gap=21.1dB
+== hevc_alac.mov --both
+analysis: channels=2 left=-16.6 dB right=-16.6 dB auto=mix (Left and right are identical. Auto keeps that sound.)
+progress: Saving 99%
+progress: Saving 100%
+converted: source=mix channels=2 cleanup=[] -> hevc_alac_both.mov
+  channels=2 audio=7.936 video=8.0 shift=0ms peak=1.10 noise_floor=-34.0dB speech=-13.0dB gap=21.1dB
+  PROBLEMS: clipping, peak 1.097
+== hevc_alac.mov --enhance --loud
+analysis: channels=2 left=-16.6 dB right=-16.6 dB auto=mix (Left and right are identical. Auto keeps that sound.)
+progress: Cleaning up the sound 1%
+progress: Cleaning up the sound 25%
+progress: Cleaning up the sound 50%
+progress: Cleaning up the sound 76%
+FAILED: Couldn't save the new video. The cleaned sound couldn't be read back.
+  CONVERSION FAILED
+== phase.mov 
+analysis: channels=2 left=-16.7 dB right=-16.7 dB auto=left (The two sides cancel out when mixed. Auto uses the left channel.)
+progress: Saving 99%
+progress: Saving 100%
+converted: source=left channels=1 cleanup=[] -> phase_mono.mov
+  channels=1 audio=8.0 video=8.0 shift=150ms peak=0.77 noise_floor=-180.0dB speech=-16.0dB gap=164.0dB
+== phase.mov --both
+analysis: channels=2 left=-16.7 dB right=-16.7 dB auto=left (The two sides cancel out when mixed. Auto uses the left channel.)
+progress: Saving 99%
+progress: Saving 100%
+converted: source=left channels=2 cleanup=[] -> phase_both.mov
+  channels=2 audio=8.0 video=8.0 shift=150ms peak=1.09 noise_floor=-180.0dB speech=-13.0dB gap=167.0dB
+  PROBLEMS: clipping, peak 1.086
+== phase.mov --enhance --loud
+analysis: channels=2 left=-16.7 dB right=-16.7 dB auto=left (The two sides cancel out when mixed. Auto uses the left channel.)
+progress: Cleaning up the sound 1%
+progress: Cleaning up the sound 25%
+progress: Cleaning up the sound 50%
+progress: Cleaning up the sound 75%
+FAILED: Couldn't save the new video. The cleaned sound couldn't be read back.
+  CONVERSION FAILED
+== mp3.mov 
+analysis: channels=2 left=-17.1 dB right=-17.1 dB auto=mix (Left and right are identical. Auto keeps that sound.)
+progress: Saving 99%
+progress: Saving 100%
+converted: source=mix channels=1 cleanup=[] -> mp3_mono.mov
+  channels=1 audio=7.992 video=8.0 shift=-10ms peak=0.73 noise_floor=-37.5dB speech=-16.4dB gap=21.1dB
+== mp3.mov --both
+analysis: channels=2 left=-17.1 dB right=-17.1 dB auto=mix (Left and right are identical. Auto keeps that sound.)
+progress: Saving 99%
+progress: Saving 100%
+converted: source=mix channels=2 cleanup=[] -> mp3_both.mov
+  channels=2 audio=7.992 video=8.0 shift=-10ms peak=1.03 noise_floor=-34.5dB speech=-13.4dB gap=21.1dB
+  PROBLEMS: clipping, peak 1.029
+== mp3.mov --enhance --loud
+analysis: channels=2 left=-17.1 dB right=-17.1 dB auto=mix (Left and right are identical. Auto keeps that sound.)
+progress: Cleaning up the sound 1%
+progress: Cleaning up the sound 25%
+progress: Cleaning up the sound 50%
+progress: Cleaning up the sound 75%
+FAILED: Couldn't save the new video. The cleaned sound couldn't be read back.
+  CONVERSION FAILED
+== opus.mp4 
+analysis: channels=2 left=-16.7 dB right=-16.7 dB auto=mix (Left and right are identical. Auto keeps that sound.)
+progress: Saving 99%
+progress: Saving 100%
+converted: source=mix channels=1 cleanup=[] -> opus_mono.mp4
+  channels=1 audio=8.004167 video=8.0 shift=0ms peak=0.78 noise_floor=-37.7dB speech=-15.9dB gap=21.7dB
+== opus.mp4 --both
+analysis: channels=2 left=-16.7 dB right=-16.7 dB auto=mix (Left and right are identical. Auto keeps that sound.)
+progress: Saving 99%
+progress: Saving 100%
+converted: source=mix channels=2 cleanup=[] -> opus_both.mp4
+  channels=2 audio=8.004167 video=8.0 shift=0ms peak=1.11 noise_floor=-34.7dB speech=-12.9dB gap=21.8dB
+  PROBLEMS: clipping, peak 1.105
+== opus.mp4 --enhance --loud
+analysis: channels=2 left=-16.7 dB right=-16.7 dB auto=mix (Left and right are identical. Auto keeps that sound.)
+progress: Cleaning up the sound 1%
+progress: Cleaning up the sound 25%
+progress: Cleaning up the sound 51%
+progress: Cleaning up the sound 75%
+FAILED: Couldn't save the new video. The cleaned sound couldn't be read back.
+  CONVERSION FAILED
+== stereo_aac.mov --noise light --enhance --loud
+analysis: channels=2 left=-16.7 dB right=-16.7 dB auto=mix (Left and right are identical. Auto keeps that sound.)
+progress: Cleaning up the sound 1%
+progress: Cleaning up the sound 25%
+progress: Cleaning up the sound 50%
+progress: Cleaning up the sound 75%
+FAILED: Couldn't save the new video. The cleaned sound couldn't be read back.
+  CONVERSION FAILED
+== stereo_aac.mov --noise medium --enhance --loud
+analysis: channels=2 left=-16.7 dB right=-16.7 dB auto=mix (Left and right are identical. Auto keeps that sound.)
+progress: Cleaning up the sound 1%
+progress: Cleaning up the sound 26%
+progress: Cleaning up the sound 51%
+progress: Cleaning up the sound 75%
+FAILED: Couldn't save the new video. The cleaned sound couldn't be read back.
+  CONVERSION FAILED
+== stereo_aac.mov --noise strong --enhance --loud
+analysis: channels=2 left=-16.7 dB right=-16.7 dB auto=mix (Left and right are identical. Auto keeps that sound.)
+progress: Cleaning up the sound 0%
+progress: Cleaning up the sound 25%
+progress: Cleaning up the sound 51%
+progress: Cleaning up the sound 75%
+FAILED: Couldn't save the new video. The cleaned sound couldn't be read back.
+  CONVERSION FAILED
+== hevc_alac.mov --noise medium --both
+analysis: channels=2 left=-16.6 dB right=-16.6 dB auto=mix (Left and right are identical. Auto keeps that sound.)
+progress: Cleaning up the sound 1%
+progress: Cleaning up the sound 25%
+progress: Cleaning up the sound 50%
+progress: Cleaning up the sound 75%
+FAILED: Couldn't save the new video. The cleaned sound couldn't be read back.
+  CONVERSION FAILED
