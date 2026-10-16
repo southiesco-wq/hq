@@ -42,9 +42,9 @@ struct ConvertOptions {
     let source: ChannelSource
     /// 1 = true mono track, 2 = the same mono sound on both left and right.
     let outputChannels: Int
+    var cleanup = CleanupOptions()
     /// Level change applied when cleanup is off, to avoid clipping (see `ChannelReport.headroomGain`).
     var gain: Float = 1
-    var cleanup = CleanupOptions()
 }
 
 /// Which step a conversion is on, for the progress line.
