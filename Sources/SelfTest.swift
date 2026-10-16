@@ -22,6 +22,7 @@ enum SelfTest {
         cleanup.evenLoudness = rest.contains("--loud")
         let channels = rest.contains("--both") ? 2 : 1
         let forced = value(after: "--source").flatMap(ChannelSource.init(rawValue:))
+        let options = cleanup
 
         Task.detached {
             do {
@@ -33,14 +34,14 @@ enum SelfTest {
                 let shown = ShownProgress()
                 try await MonoConverter.convert(input: input,
                                                 output: output,
-                                                options: ConvertOptions(source: source, outputChannels: channels, cleanup: cleanup),
+                                                options: ConvertOptions(source: source, outputChannels: channels, cleanup: options),
                                                 cancel: CancelFlag()) { fraction, stage in
                     let pct = Int(fraction * 100)
                     if shown.update(pct / 25) {
                         print("progress: \(stage.label) \(pct)%")
                     }
                 }
-                print("converted: source=\(source.rawValue) channels=\(channels) cleanup=[\(cleanup.summary)] -> \(output.lastPathComponent)")
+                print("converted: source=\(source.rawValue) channels=\(channels) cleanup=[\(options.summary)] -> \(output.lastPathComponent)")
                 exit(0)
             } catch {
                 print("FAILED: \(error.localizedDescription)")
