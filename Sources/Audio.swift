@@ -167,20 +167,8 @@ enum ChannelAnalyzer {
     /// Decodes the sound once and measures each side, so Auto can pick the right source.
     static func analyze(url: URL) async throws -> ChannelReport {
         let asset = AVURLAsset(url: url)
-        let audioTracks: [AVAssetTrack]
-        do {
-            audioTracks = try await asset.loadTracks(withMediaType: .audio)
-        } catch {
-            throw MonoError.cannotRead(error.localizedDescription)
-        }
-        guard let track = audioTracks.first else { throw MonoError.noAudio }
-
-        var channelCount = 2
-        if let format = (try? await track.load(.formatDescriptions))?.first,
-           let asbd = CMAudioFormatDescriptionGetStreamBasicDescription(format) {
-            channelCount = Int(asbd.pointee.mChannelsPerFrame)
-        }
-        let channels = channelCount
+        let tracks = try await SoundTracks.load(from: asset)
+        guard !tracks.isEmpty else { throw MonoError.noAudio }
 
         return try await runInBackground {
             let reader: AVAssetReader
@@ -190,12 +178,8 @@ enum ChannelAnalyzer {
                 throw MonoError.cannotRead(error.localizedDescription)
             }
             // A lower rate is plenty for measuring loudness and decodes faster.
-            let output = AVAssetReaderTrackOutput(track: track, outputSettings: PCM.readerSettings(sampleRate: 24_000))
-            output.alwaysCopiesSampleData = false
-            guard reader.canAdd(output) else {
-                throw MonoError.cannotRead("Its sound format isn't supported by macOS.")
-            }
-            reader.add(output)
+            let (output, chosen) = try SoundTracks.addOutput(to: reader, from: tracks, sampleRate: 24_000)
+            let channels = chosen.channels
             guard reader.startReading() else {
                 throw MonoError.cannotRead(reader.error?.localizedDescription ?? "Reading didn't start.")
             }
@@ -347,25 +331,19 @@ enum MonoConverter {
                         cancel: CancelFlag,
                         progress: @escaping @Sendable (Double, ConvertStage) -> Void) async throws {
         let asset = AVURLAsset(url: input)
-        let audioTracks: [AVAssetTrack]
+        let audioTracks = try await SoundTracks.load(from: asset)
         let videoTracks: [AVAssetTrack]
         let duration: CMTime
         do {
-            audioTracks = try await asset.loadTracks(withMediaType: .audio)
             videoTracks = try await asset.loadTracks(withMediaType: .video)
             duration = try await asset.load(.duration)
         } catch {
             throw MonoError.cannotRead(error.localizedDescription)
         }
-        guard let audioTrack = audioTracks.first else { throw MonoError.noAudio }
+        guard let firstSound = audioTracks.first else { throw MonoError.noAudio }
         let metadata = (try? await asset.load(.metadata)) ?? []
 
-        var sourceRate = 48_000.0
-        if let format = (try? await audioTrack.load(.formatDescriptions))?.first,
-           let asbd = CMAudioFormatDescriptionGetStreamBasicDescription(format) {
-            sourceRate = asbd.pointee.mSampleRate
-        }
-        let original = sourceRate
+        let original = firstSound.sampleRate
         var rate = aacRates.min(by: { abs($0 - original) < abs($1 - original) }) ?? 48_000
 
         var specs: [VideoSpec] = []
@@ -390,7 +368,7 @@ enum MonoConverter {
         if options.cleanup.isActive {
             let result = try await runInBackground {
                 try AudioCleaner.clean(asset: asset,
-                                       track: audioTrack,
+                                       tracks: audioTracks,
                                        duration: duration,
                                        source: options.source,
                                        options: options.cleanup,
@@ -423,7 +401,7 @@ enum MonoConverter {
         try await runInBackground {
             try MonoConverter.run(asset: asset,
                                   videoSpecs: videoSpecs,
-                                  audioTrack: audioTrack,
+                                  audioTracks: audioTracks,
                                   cleaned: cleanedAudio,
                                   cleanedTrack: cleanedSource,
                                   rate: finalRate,
@@ -441,7 +419,7 @@ enum MonoConverter {
 
     private static func run(asset: AVAsset,
                             videoSpecs: [VideoSpec],
-                            audioTrack: AVAssetTrack,
+                            audioTracks: [SoundTrack],
                             cleaned: CleanedAudio?,
                             cleanedTrack: AVAssetTrack?,
                             rate: Double,
@@ -474,24 +452,25 @@ enum MonoConverter {
         // Sound: either the original decoded to stereo float (so a channel can be picked or mixed),
         // or the cleaned-up temporary file from step 1, read by its own reader.
         let audioReader: AVAssetReader
-        let audioOutput: AVAssetReaderTrackOutput
+        let audioOutput: AVAssetReaderOutput
         if let cleaned = cleaned, let cleanedTrack = cleanedTrack {
             do {
                 audioReader = try AVAssetReader(asset: AVURLAsset(url: cleaned.url))
             } catch {
                 throw MonoError.cannotWrite("The cleaned sound couldn't be read back.")
             }
-            audioOutput = AVAssetReaderTrackOutput(track: cleanedTrack,
-                                                   outputSettings: PCM.readerSettings(sampleRate: cleaned.rate, channels: 1))
+            let cleanedOutput = AVAssetReaderTrackOutput(track: cleanedTrack,
+                                                         outputSettings: PCM.readerSettings(sampleRate: cleaned.rate, channels: 1))
+            cleanedOutput.alwaysCopiesSampleData = false
+            guard audioReader.canAdd(cleanedOutput) else {
+                throw MonoError.cannotWrite("The cleaned sound couldn't be read back.")
+            }
+            audioReader.add(cleanedOutput)
+            audioOutput = cleanedOutput
         } else {
             audioReader = reader
-            audioOutput = AVAssetReaderTrackOutput(track: audioTrack, outputSettings: PCM.readerSettings(sampleRate: rate))
+            audioOutput = try SoundTracks.addOutput(to: reader, from: audioTracks, sampleRate: rate).output
         }
-        audioOutput.alwaysCopiesSampleData = false
-        guard audioReader.canAdd(audioOutput) else {
-            throw MonoError.cannotRead("Its sound format isn't supported by macOS.")
-        }
-        audioReader.add(audioOutput)
         let separateAudioReader = audioReader !== reader
 
         var built = try makeWriter(output: output, fileType: fileType, videoSpecs: videoSpecs,

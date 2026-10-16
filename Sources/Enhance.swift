@@ -490,7 +490,7 @@ enum AudioCleaner {
     /// Decodes the sound, picks the channel(s), removes noise / applies EQ, measures loudness,
     /// and writes the result to a temporary mono file. Runs on a background thread.
     static func clean(asset: AVAsset,
-                      track: AVAssetTrack,
+                      tracks: [SoundTrack],
                       duration: CMTime,
                       source: ChannelSource,
                       options: CleanupOptions,
@@ -502,12 +502,7 @@ enum AudioCleaner {
         } catch {
             throw MonoError.cannotRead(error.localizedDescription)
         }
-        let output = AVAssetReaderTrackOutput(track: track, outputSettings: PCM.readerSettings(sampleRate: rate))
-        output.alwaysCopiesSampleData = false
-        guard reader.canAdd(output) else {
-            throw MonoError.cannotRead("Its sound format isn't supported by macOS.")
-        }
-        reader.add(output)
+        let output = try SoundTracks.addOutput(to: reader, from: tracks, sampleRate: rate).output
 
         let isolator: VoiceIsolator? = options.noise == .off
             ? nil

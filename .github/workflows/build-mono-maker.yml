@@ -17,35 +17,40 @@ jobs:
       - name: Show toolchain
         run: |
           sw_vers
-          xcode-select -p
           xcrun swiftc --version
 
       - name: Build the app
-        run: bash build.command
+        run: |
+          mkdir -p dist
+          bash build.command 2>&1 | tee dist/build-log.txt
+          test -x "Mono Maker.app/Contents/MacOS/MonoMaker"
 
       - name: Smoke test (app launches and stays up)
         run: |
-          file "Mono Maker.app/Contents/MacOS/MonoMaker"
           "Mono Maker.app/Contents/MacOS/MonoMaker" &
           PID=$!
           sleep 8
-          if kill -0 $PID 2>/dev/null; then echo "App is running"; kill $PID; else echo "App exited early"; wait $PID; exit 1; fi
+          if kill -0 $PID 2>/dev/null; then echo "App is running"; kill $PID; else echo "App exited early"; exit 1; fi
 
-      - name: Package
-        run: ditto -c -k --sequesterRsrc --keepParent "Mono Maker.app" "Mono-Maker.zip"
-
-      - name: Save the built app to the branch
+      - name: Conversion tests
+        id: tests
+        continue-on-error: true
         run: |
-          mkdir -p dist
-          mv Mono-Maker.zip dist/Mono-Maker.zip
+          brew install ffmpeg >/dev/null 2>&1 || brew install ffmpeg
+          python3 -m pip install --quiet --break-system-packages numpy 2>/dev/null || python3 -m pip install --quiet numpy
+          set -o pipefail
+          { sw_vers; bash tests/make_media.sh; bash tests/run_tests.sh; } 2>&1 | tee dist/test-log.txt
+
+      - name: Save the built app and logs to the branch
+        if: always()
+        run: |
+          ditto -c -k --sequesterRsrc --keepParent "Mono Maker.app" dist/Mono-Maker.zip
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -f dist/Mono-Maker.zip
-          git commit -m "Built Mono Maker.app [skip ci]"
+          git add -f dist/
+          git commit -m "Built Mono Maker.app (tests: ${{ steps.tests.outcome }}) [skip ci]"
           git push
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: Mono-Maker
-          path: dist/Mono-Maker.zip
-          retention-days: 30
+      - name: Fail if tests failed
+        if: steps.tests.outcome != 'success'
+        run: exit 1

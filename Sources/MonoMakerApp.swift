@@ -3,6 +3,16 @@ import AppKit
 import UniformTypeIdentifiers
 
 @main
+enum Launcher {
+    static func main() {
+        if CommandLine.arguments.contains("--selftest") {
+            SelfTest.run(Array(CommandLine.arguments.dropFirst()))
+        } else {
+            MonoMakerApp.main()
+        }
+    }
+}
+
 struct MonoMakerApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var model = AppModel()
