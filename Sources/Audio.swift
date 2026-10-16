@@ -27,12 +27,23 @@ struct ChannelReport {
     /// What Auto will use for this file, and a sentence explaining why.
     let recommendation: ChannelSource
     let note: String
+    /// Highest sample level (linear, 1.0 = full scale) for each way of making mono.
+    var peaks: [ChannelSource: Double] = [:]
+
+    /// Gain that keeps the chosen sound below full scale. Below 1 only when the original is
+    /// already over (common when 4- or 6-channel sound is folded down).
+    func headroomGain(for source: ChannelSource) -> Float {
+        guard let peak = peaks[source], peak > 0.97 else { return 1 }
+        return Float(0.97 / peak)
+    }
 }
 
 struct ConvertOptions {
     let source: ChannelSource
     /// 1 = true mono track, 2 = the same mono sound on both left and right.
     let outputChannels: Int
+    /// Level change applied when cleanup is off, to avoid clipping (see `ChannelReport.headroomGain`).
+    var gain: Float = 1
     var cleanup = CleanupOptions()
 }
 
@@ -187,6 +198,9 @@ enum ChannelAnalyzer {
             var sumLeft = 0.0
             var sumRight = 0.0
             var sumMix = 0.0
+            var peakLeft = 0.0
+            var peakRight = 0.0
+            var peakMix = 0.0
             var frames = 0
             while let buffer = output.copyNextSampleBuffer() {
                 guard let samples = PCM.stereoSamples(of: buffer) else { continue }
@@ -198,6 +212,9 @@ enum ChannelAnalyzer {
                     sumLeft += l * l
                     sumRight += r * r
                     sumMix += m * m
+                    peakLeft = max(peakLeft, abs(l))
+                    peakRight = max(peakRight, abs(r))
+                    peakMix = max(peakMix, abs(m))
                     frames += 1
                     i += 2
                 }
@@ -205,7 +222,9 @@ enum ChannelAnalyzer {
             if reader.status == .failed {
                 throw MonoError.cannotRead(reader.error?.localizedDescription ?? "Reading stopped.")
             }
-            return ChannelAnalyzer.makeReport(channels: channels, sumLeft: sumLeft, sumRight: sumRight, sumMix: sumMix, frames: frames)
+            var report = ChannelAnalyzer.makeReport(channels: channels, sumLeft: sumLeft, sumRight: sumRight, sumMix: sumMix, frames: frames)
+            report.peaks = [.left: peakLeft, .right: peakRight, .mix: peakMix]
+            return report
         }
     }
 
@@ -364,6 +383,7 @@ enum MonoConverter {
         // Step 1 (only when cleaning up): process the sound into a temporary file.
         var cleaned: CleanedAudio?
         var cleanedTrack: AVAssetTrack?
+        var cleanedAsset: AVURLAsset?
         var saveStart = 0.0
         if options.cleanup.isActive {
             let result = try await runInBackground {
@@ -379,14 +399,17 @@ enum MonoConverter {
             cleaned = result
             rate = result.rate
             saveStart = 0.85
+            // Keep this asset alive: a track only works with a reader made from its own asset.
+            let readBack = AVURLAsset(url: result.url)
+            cleanedAsset = readBack
             do {
-                cleanedTrack = try await AVURLAsset(url: result.url).loadTracks(withMediaType: .audio).first
+                cleanedTrack = try await readBack.loadTracks(withMediaType: .audio).first
             } catch {
                 cleanedTrack = nil
             }
             guard cleanedTrack != nil else {
                 try? FileManager.default.removeItem(at: result.url)
-                throw MonoError.cannotWrite("The cleaned sound couldn't be read back.")
+                throw MonoError.cannotWrite("The cleaned sound couldn't be opened (no sound track in the temporary file).")
             }
         }
         defer {
@@ -397,6 +420,7 @@ enum MonoConverter {
         let finalRate = rate
         let cleanedAudio = cleaned
         let cleanedSource = cleanedTrack
+        let cleanedReadAsset = cleanedAsset
         let start = saveStart
         try await runInBackground {
             try MonoConverter.run(asset: asset,
@@ -404,6 +428,7 @@ enum MonoConverter {
                                   audioTracks: audioTracks,
                                   cleaned: cleanedAudio,
                                   cleanedTrack: cleanedSource,
+                                  cleanedAsset: cleanedReadAsset,
                                   rate: finalRate,
                                   duration: duration,
                                   metadata: metadata,
@@ -422,6 +447,7 @@ enum MonoConverter {
                             audioTracks: [SoundTrack],
                             cleaned: CleanedAudio?,
                             cleanedTrack: AVAssetTrack?,
+                            cleanedAsset: AVAsset?,
                             rate: Double,
                             duration: CMTime,
                             metadata: [AVMetadataItem],
@@ -453,17 +479,17 @@ enum MonoConverter {
         // or the cleaned-up temporary file from step 1, read by its own reader.
         let audioReader: AVAssetReader
         let audioOutput: AVAssetReaderOutput
-        if let cleaned = cleaned, let cleanedTrack = cleanedTrack {
+        if let cleaned = cleaned, let cleanedTrack = cleanedTrack, let cleanedAsset = cleanedAsset {
             do {
-                audioReader = try AVAssetReader(asset: AVURLAsset(url: cleaned.url))
+                audioReader = try AVAssetReader(asset: cleanedAsset)
             } catch {
-                throw MonoError.cannotWrite("The cleaned sound couldn't be read back.")
+                throw MonoError.cannotWrite("The cleaned sound couldn't be read back (\(error.localizedDescription)).")
             }
             let cleanedOutput = AVAssetReaderTrackOutput(track: cleanedTrack,
                                                          outputSettings: PCM.readerSettings(sampleRate: cleaned.rate, channels: 1))
             cleanedOutput.alwaysCopiesSampleData = false
             guard audioReader.canAdd(cleanedOutput) else {
-                throw MonoError.cannotWrite("The cleaned sound couldn't be read back.")
+                throw MonoError.cannotWrite("The cleaned sound couldn't be decoded.")
             }
             audioReader.add(cleanedOutput)
             audioOutput = cleanedOutput
@@ -518,9 +544,10 @@ enum MonoConverter {
         } else {
             let source = options.source
             let channels = options.outputChannels
+            let gain = options.gain
             audioTransform = { sample in
                 if CMSampleBufferGetNumSamples(sample) == 0 { return .skip }
-                guard let remixed = MonoConverter.remix(sample, source: source, channels: channels, format: format) else {
+                guard let remixed = MonoConverter.remix(sample, source: source, channels: channels, gain: gain, format: format) else {
                     return .failed
                 }
                 return .buffer(remixed)
@@ -711,6 +738,7 @@ enum MonoConverter {
     private static func remix(_ buffer: CMSampleBuffer,
                               source: ChannelSource,
                               channels: Int,
+                              gain: Float,
                               format: CMAudioFormatDescription) -> CMSampleBuffer? {
         guard let stereo = PCM.stereoSamples(of: buffer) else { return nil }
         let frames = stereo.count / 2
@@ -726,8 +754,9 @@ enum MonoConverter {
             case .right: value = right
             case .mix: value = (left + right) * 0.5
             }
+            let level = min(max(value * gain, -1), 1)
             for channel in 0..<channels {
-                mono[frame * channels + channel] = value
+                mono[frame * channels + channel] = level
             }
         }
 

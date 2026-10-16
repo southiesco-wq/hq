@@ -34,7 +34,8 @@ enum SelfTest {
                 let shown = ShownProgress()
                 try await MonoConverter.convert(input: input,
                                                 output: output,
-                                                options: ConvertOptions(source: source, outputChannels: channels, cleanup: options),
+                                                options: ConvertOptions(source: source, outputChannels: channels, cleanup: options,
+                                                                       gain: report.headroomGain(for: source)),
                                                 cancel: CancelFlag()) { fraction, stage in
                     let pct = Int(fraction * 100)
                     if shown.update(pct / 25) {

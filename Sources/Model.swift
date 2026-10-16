@@ -249,7 +249,8 @@ final class AppModel: ObservableObject {
         do {
             try await MonoConverter.convert(input: item.url,
                                             output: destination,
-                                            options: ConvertOptions(source: source, outputChannels: channels, cleanup: cleanup),
+                                            options: ConvertOptions(source: source, outputChannels: channels, cleanup: cleanup,
+                                                                     gain: item.report?.headroomGain(for: source) ?? 1),
                                             cancel: flag) { @Sendable fraction, stage in
                 Task { @MainActor in
                     if item.state == .converting {
