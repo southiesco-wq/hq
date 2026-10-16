@@ -1,6 +1,6 @@
 Building Mono Maker…
   compiling for arm64
-  compiling for x86_64
-
-Done. "Mono Maker.app" is in: /Users/runner/work/hq/hq
-Drag it into your Applications folder, then open it like any other app.
+Sources/Model.swift:253:70: error: argument 'gain' must precede argument 'cleanup'
+                                                                     gain: item.report?.headroomGain(for: source) ?? 1),
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+error: fatalError
