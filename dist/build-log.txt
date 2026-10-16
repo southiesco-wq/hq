@@ -1,0 +1,9 @@
+Building Mono Maker…
+  compiling for arm64
+Sources/SelfTest.swift:36:124: error: reference to captured var 'cleanup' in concurrently-executing code
+                                                options: ConvertOptions(source: source, outputChannels: channels, cleanup: cleanup),
+                                                                                                                           ^
+Sources/SelfTest.swift:43:93: error: reference to captured var 'cleanup' in concurrently-executing code
+                print("converted: source=\(source.rawValue) channels=\(channels) cleanup=[\(cleanup.summary)] -> \(output.lastPathComponent)")
+                                                                                            ^
+error: fatalError
